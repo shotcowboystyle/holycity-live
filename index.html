@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Holy City Live</title>
+<meta name="description" content="Live flood, heat, construction, public safety and city-service dashboards for Charleston, SC, built on public NOAA, USGS, FEMA, City and County data.">
+<style>
+  :root { --bg: #0b0f14; --bar: #0f141c; --line: #253041; --text: #e6edf3; --muted: #8b98a8; --accent: #4cc3ff; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { display: flex; flex-direction: column; }
+  nav { display: flex; align-items: stretch; gap: 2px; padding: 0 12px; background: var(--bar); border-bottom: 1px solid var(--line);
+    overflow-x: auto; flex: 0 0 auto; }
+  nav b { align-self: center; margin-right: 14px; white-space: nowrap; font-size: 14px; }
+  nav b small { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  nav button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); padding: 11px 12px 9px;
+    font: inherit; cursor: pointer; white-space: nowrap; }
+  nav button:hover { color: var(--text); }
+  nav button[aria-selected=true] { color: var(--text); border-bottom-color: var(--accent); }
+  nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  main { position: relative; flex: 1; }
+  /* inactive tabs stay laid out (visibility, not display) so maps keep their size and state */
+  iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; visibility: hidden; }
+  iframe.active { visibility: visible; }
+</style>
+</head>
+<body>
+<nav role="tablist" aria-label="Dashboards">
+  <b>Holy City Live<small>Charleston, SC</small></b>
+  <button role="tab" data-tab="risk" data-src="risk.html">Flood &amp; Heat Risk</button>
+  <button role="tab" data-tab="construction" data-src="construction.html">Construction Near Me</button>
+  <button role="tab" data-tab="safety" data-src="safety.html">Public Safety Trends</button>
+  <button role="tab" data-tab="services" data-src="services.html">Service Days</button>
+</nav>
+<main id="panes"></main>
+<script>
+  // Each dashboard is its own page, loaded into an iframe the first time its tab opens and kept alive after.
+  const tabs = [...document.querySelectorAll('[role=tab]')], panes = document.getElementById('panes'), frames = {};
+  function show(name) {
+    const tab = tabs.find(t => t.dataset.tab === name) ?? tabs[0];
+    if (!frames[tab.dataset.tab]) {
+      const f = document.createElement('iframe');
+      f.src = tab.dataset.src; f.title = tab.textContent;
+      f.allow = 'geolocation'; // "use my location" in the dashboards
+      panes.appendChild(f); frames[tab.dataset.tab] = f;
+    }
+    for (const t of tabs) {
+      const on = t === tab, f = frames[t.dataset.tab];
+      t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1;
+      if (f) { f.classList.toggle('active', on); f.contentWindow?.postMessage({ type: 'tab', active: on }, location.origin); }
+    }
+    if (location.hash !== '#' + tab.dataset.tab) history.replaceState(null, '', '#' + tab.dataset.tab);
+  }
+  for (const t of tabs) t.onclick = () => show(t.dataset.tab);
+  document.querySelector('nav').addEventListener('keydown', e => { // arrow keys move between tabs
+    const i = tabs.indexOf(document.activeElement); if (i < 0 || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+    const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; next.focus(); show(next.dataset.tab);
+  });
+  addEventListener('hashchange', () => show(location.hash.slice(1)));
+  show(location.hash.slice(1));
+</script>
+</body>
+</html>

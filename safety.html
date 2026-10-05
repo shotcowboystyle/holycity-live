@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Public Safety Trends · Holy City Live</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="dash.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+</head>
+<body>
+<aside class="side">
+  <h1>Public Safety Trends</h1>
+  <div class="sub">Charleston Police Department open data, set against neighborhood equity data from the City.</div>
+
+  <h2>Show</h2>
+  <div class="row">
+    <select id="ds"><option value="arrests">Arrests</option><option value="contacts">Police field contacts (stops)</option></select>
+    <select id="days"><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="365">Last 12 months</option></select>
+  </div>
+
+  <h2>Summary</h2>
+  <div class="tiles">
+    <div class="tile"><b id="total">—</b><span id="totalLbl">in period</span></div>
+    <div class="tile"><b id="change">—</b><span>vs. previous period</span></div>
+    <div class="tile"><b id="perDay">—</b><span>per day</span></div>
+    <div class="tile"><b id="topTeam">—</b><span>busiest patrol team</span></div>
+  </div>
+
+  <h2>Monthly trend (24 months)</h2>
+  <div id="trend"></div>
+  <div class="sub">Current month is partial (lighter bar).</div>
+
+  <h2 id="catTitle">Top categories</h2>
+  <div id="cats"></div>
+  <h2>By patrol team</h2>
+  <div id="teams"></div>
+
+  <h2>Neighborhood shading</h2>
+  <select id="metric"></select>
+  <div id="legend" class="swatches"></div>
+  <div class="sub">Click a subdivision for its equity profile and activity in the period. Dots are individual records.</div>
+
+  <div class="note">Arrests and stops measure police activity, not crime rates, and are recorded where they happened, not where people live —
+    so per-resident rates are skewed in commercial and nightlife areas. Rates are hidden for subdivisions under 200 residents.
+    Only date, location, charge/reason and patrol team are requested; personal fields in the source aren't used.
+    The City's "Incidents" layer stops in March 2017 and is left out. Stop reason codes are CPD's own and aren't explained in the source.</div>
+  <div class="note" id="status"></div>
+</aside>
+<div id="map"></div>
+<script type="module">
+import { CITY, CITY_V1, $, esc, money, query, queryAll, makeMap, bars, columns } from './dash.js';
+
+const DS = {
+  arrests: { layer: `${CITY_V1}/PDI_Data/MapServer/1`, date: 'ArrestDate', id: 'ArrestID', oid: 'ArrestID', cat: 'CHARGE', noun: 'arrests', catTitle: 'Top charges' },
+  contacts: { layer: `${CITY_V1}/PDI_Data/MapServer/0`, date: 'FCCDATE', id: 'FCCID', oid: 'ESRI_OID', cat: 'REASONCODE', noun: 'field contacts', catTitle: 'Top stop reason codes' },
+};
+const EQUITY = `${CITY}/Equity/MapServer`, MIN_POP = 200;
+const RATE_COLORS = ['#fde0dd', '#fa9fb5', '#f768a1', '#c51b8a', '#7a0177'];
+const iso = d => d.toISOString().slice(0, 10);
+const daysAgo = n => new Date(Date.now() - n * 864e5);
+const team = t => { t = (t ?? '').trim(); return !t ? 'Unassigned' : /^\d+$/.test(t) ? 'T' + t : t; }; // source mixes "T4" and "4"
+const countStat = (d, field) => JSON.stringify([{ statisticType: 'count', onStatisticField: d.id, outStatisticFieldName: 'n' }]);
+
+const map = makeMap('map', undefined, 13);
+const subLayer = L.geoJSON(null, { style: () => ({}) }).addTo(map), dots = L.layerGroup().addTo(map);
+let subs = [], renderers = {}, pts = [], cache = {};
+
+// ---- neighborhoods (City equity layer: one polygon per subdivision with all metrics) ----
+const equityP = Promise.all([
+  getRenderers(),
+  queryAll(`${EQUITY}/10`, { where: '1=1', outFields: 'SUBDIVISION,TotPop,MedHH_Inc,PCT_Pov,PCT_HH_0_VEH,PCT_Walk,PCT_Black', maxAllowableOffset: 0.00005, geometryPrecision: 5 }, 1000),
+]).then(([r, f]) => {
+  renderers = r;
+  subs = f.filter(x => x.geometry).map(x => ({ f: x, p: x.properties, box: bbox(x.geometry), n: 0 }));
+  $('metric').innerHTML = `<option value="rate">Activity per 1,000 residents (selected period)</option>`
+    + Object.entries(r).map(([id, x]) => `<option value="${id}" ${id === '10' ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
+});
+async function getRenderers() {
+  const d = await query(EQUITY + '/layers', {});
+  return Object.fromEntries(d.layers.map(l => { const r = l.drawingInfo.renderer; return [l.id, {
+    name: l.name.replace(/^Subdivisions:\s*/, ''), field: r.field,
+    breaks: r.classBreakInfos.map(c => ({ max: c.classMaxValue, color: `rgb(${c.symbol.color.slice(0, 3)})`, label: c.label })) }]; }));
+}
+function bbox(g) {
+  const b = [180, 90, -180, -90], rings = g.type === 'Polygon' ? g.coordinates : g.coordinates.flat();
+  for (const r of rings) for (const [x, y] of r) { b[0] = Math.min(b[0], x); b[1] = Math.min(b[1], y); b[2] = Math.max(b[2], x); b[3] = Math.max(b[3], y); }
+  return b;
+}
+function inRing(x, y, ring) {
+  let c = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+}
+const inPoly = (x, y, g) => (g.type === 'Polygon' ? [g.coordinates] : g.coordinates).some(p => inRing(x, y, p[0]) && !p.slice(1).some(h => inRing(x, y, h)));
+
+// ---- police data ----
+async function loadPeriod(dsKey, days) {
+  const key = `${dsKey}|${days}`;
+  if (cache[key]) return cache[key];
+  const d = DS[dsKey], from = daysAgo(days), prevFrom = daysAgo(days * 2);
+  const where = `${d.date} >= DATE '${iso(from)}'`;
+  const grouped = field => query(d.layer, { where, outStatistics: countStat(d), groupByFieldsForStatistics: field, orderByFields: 'n DESC' })
+    .then(r => r.features.map(f => [f.attributes[field], f.attributes.n]));
+  const months = Array.from({ length: 25 }, (_, k) => { const m = new Date(); m.setDate(1); m.setMonth(m.getMonth() - 24 + k); return m; });
+  const [total, prev, cats, teams, trend, points] = await Promise.all([
+    query(d.layer, { where, returnCountOnly: true }).then(r => r.count),
+    query(d.layer, { where: `${d.date} >= DATE '${iso(prevFrom)}' AND ${d.date} < DATE '${iso(from)}'`, returnCountOnly: true }).then(r => r.count),
+    grouped(d.cat), grouped('TEAM'),
+    Promise.all(months.map(m => { const n = new Date(m); n.setMonth(n.getMonth() + 1);
+      return query(d.layer, { where: `${d.date} >= DATE '${iso(m)}' AND ${d.date} < DATE '${iso(n)}'`, returnCountOnly: true })
+        .then(r => [m.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }), r.count]); })),
+    queryAll(d.layer, { where, outFields: `${d.date},${d.cat}`, orderByFields: d.oid }, 1000),
+  ]);
+  const t = {}; for (const [k, n] of teams) t[team(k)] = (t[team(k)] ?? 0) + n;
+  return cache[key] = { total, prev, cats, teams: Object.entries(t).sort((a, b) => b[1] - a[1]), trend, points };
+}
+
+async function refresh() {
+  const dsKey = $('ds').value, days = +$('days').value, d = DS[dsKey];
+  $('status').textContent = 'Loading…';
+  let r;
+  try { [r] = await Promise.all([loadPeriod(dsKey, days), equityP]); }
+  catch (e) { $('status').innerHTML = `<span class="bad">Load failed: ${esc(e.message)}</span>`; return; } // shown in panel
+  if (dsKey !== $('ds').value || days !== +$('days').value) return; // selection changed while loading
+  $('total').textContent = r.total.toLocaleString(); $('totalLbl').textContent = `${d.noun}, last ${days} days`;
+  const ch = r.prev ? (r.total - r.prev) / r.prev * 100 : null;
+  $('change').textContent = ch == null ? '—' : `${ch > 0 ? '+' : ''}${ch.toFixed(0)} %`;
+  $('perDay').textContent = (r.total / days).toFixed(1);
+  $('topTeam').textContent = r.teams[0]?.[0] ?? '—';
+  columns($('trend'), r.trend, { every: 4, highlightLast: true });
+  $('catTitle').textContent = d.catTitle;
+  bars($('cats'), r.cats.slice(0, 10).map(([k, n]) => [(k ?? '').trim() || 'Unspecified', n]));
+  bars($('teams'), r.teams.map(([k, n]) => [k, n, '#c084fc']));
+
+  pts = r.points.filter(f => f.geometry);
+  for (const s of subs) s.n = 0;
+  for (const f of pts) {
+    const [x, y] = f.geometry.coordinates;
+    const s = subs.find(s => x >= s.box[0] && x <= s.box[2] && y >= s.box[1] && y <= s.box[3] && inPoly(x, y, s.f.geometry));
+    if (s) s.n++;
+  }
+  dots.clearLayers();
+  for (const f of pts) L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]], { radius: 2, weight: 0, fillColor: '#ffd166', fillOpacity: 0.75, interactive: false }).addTo(dots);
+  shade();
+  $('status').textContent = `${pts.length.toLocaleString()} mapped records · updated ${new Date().toLocaleTimeString()}.`;
+}
+
+function shade() {
+  const m = $('metric').value, d = DS[$('ds').value], days = +$('days').value;
+  const rate = s => s.p.TotPop >= MIN_POP ? s.n / s.p.TotPop * 1000 : null;
+  let colorOf, legend;
+  if (m === 'rate') { // quintile breaks over subdivisions with enough residents
+    const v = subs.map(rate).filter(x => x != null).sort((a, b) => a - b);
+    const q = [0.2, 0.4, 0.6, 0.8].map(p => v[Math.floor(p * (v.length - 1))] ?? 0);
+    colorOf = s => { const x = rate(s); return x == null ? null : RATE_COLORS[q.filter(b => x > b).length]; };
+    legend = RATE_COLORS.map((c, i) => [c, i === 0 ? `≤ ${q[0].toFixed(1)}` : i === 4 ? `> ${q[3].toFixed(1)}` : `${q[i - 1].toFixed(1)}–${q[i].toFixed(1)}`]);
+  } else {
+    const r = renderers[m];
+    colorOf = s => { const x = s.p[r.field]; return x == null ? null : (r.breaks.find(b => x <= b.max) ?? r.breaks.at(-1)).color; };
+    legend = r.breaks.map(b => [b.color, b.label]);
+  }
+  $('legend').innerHTML = legend.map(([c, l]) => `<span><i style="background:${c}"></i>${esc(l)}</span>`).join('') + '<span><i style="background:#2a3340"></i>no data</span>';
+  subLayer.clearLayers();
+  for (const s of subs) {
+    const c = colorOf(s), x = rate(s);
+    L.geoJSON(s.f, { style: { color: '#0b0f14', weight: 0.6, fillColor: c ?? '#2a3340', fillOpacity: c ? 0.62 : 0.35 } })
+      .bindPopup(`<b>${esc(s.p.SUBDIVISION)}</b><br>Population ${s.p.TotPop?.toLocaleString() ?? '—'} · median income ${money(s.p.MedHH_Inc)}<br>
+        Poverty ${s.p.PCT_Pov?.toFixed(0) ?? '—'} % · no car ${s.p.PCT_HH_0_VEH?.toFixed(0) ?? '—'} % · walk to work ${s.p.PCT_Walk?.toFixed(0) ?? '—'} %<br>
+        <b>${s.n.toLocaleString()}</b> ${d.noun} in last ${days} days${x == null ? '' : ` · ${x.toFixed(1)} per 1,000 residents`}`).addTo(subLayer);
+  }
+}
+
+$('ds').onchange = refresh; $('days').onchange = refresh;
+$('metric').onchange = () => subs.length && shade();
+refresh();
+</script>
+</body>
+</html>
