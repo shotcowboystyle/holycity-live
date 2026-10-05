@@ -4,16 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flood &amp; Heat Risk · Holy City Live</title>
+<link rel="stylesheet" href="tokens.css">
 <style>
-  :root {
-    --bg: #0b0f14; --panel: rgba(15, 20, 28, 0.88); --line: #253041; --text: #e6edf3;
-    --muted: #8b98a8; --accent: #4cc3ff; --minor: #f2c94c; --moderate: #f2994a; --major: #eb5757;
-  }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
     font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
   #view { position: fixed; inset: 0; }
-  .panel { position: fixed; top: 12px; background: var(--panel); border: 1px solid var(--line);
+  .panel { position: fixed; top: 12px; background: var(--glass); border: 1px solid var(--line);
     border-radius: 10px; padding: 12px 14px; max-height: calc(100% - 24px); overflow-y: auto;
     backdrop-filter: blur(6px); }
   #left { left: 12px; width: 300px; }
@@ -24,10 +21,11 @@
   .sub { color: var(--muted); font-size: 12px; }
   label { display: flex; align-items: center; gap: 8px; margin: 4px 0; cursor: pointer; }
   input[type=range] { width: 100%; accent-color: var(--accent); }
-  select { width: 100%; background: #111823; color: var(--text); border: 1px solid var(--line);
-    border-radius: 6px; padding: 4px 6px; }
-  button { background: #16202d; color: var(--text); border: 1px solid var(--line); border-radius: 6px;
-    padding: 4px 10px; cursor: pointer; }
+  select, input[type=search] { width: 100%; background: var(--control-bg); color: var(--text); border: 1px solid var(--control-line);
+    border-radius: 6px; padding: 4px 6px; font: inherit; }
+  #addr .row > input { flex: 1; } #addr button { flex: 0 0 auto; }
+  button { background: var(--button-bg); color: var(--text); border: 1px solid var(--control-line); border-radius: 6px;
+    padding: 4px 10px; cursor: pointer; white-space: nowrap; }
   button:hover { border-color: var(--accent); }
   .row { display: flex; gap: 8px; align-items: center; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
@@ -37,7 +35,7 @@
   #when { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .tag { display: inline-block; padding: 1px 7px; border-radius: 99px; font-size: 11px; font-weight: 600; color: #0b0f14; }
   canvas.chart { width: 100%; height: 120px; display: block; }
-  .alert { border-left: 3px solid var(--major); padding: 4px 8px; margin: 4px 0; background: #1a1216; border-radius: 4px; }
+  .alert { border-left: 3px solid var(--major); padding: 4px 8px; margin: 4px 0; background: var(--alert-bg); border-radius: 4px; }
   .ramp { height: 8px; border-radius: 4px; margin: 4px 0 2px; }
   .ramp-l { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
   .ticks { position: relative; height: 14px; color: var(--muted); font-size: 11px; }
@@ -45,14 +43,15 @@
   .ticks span:first-child { transform: none; } .ticks span:last-child { transform: translateX(-100%); }
   #sources li { margin: 2px 0; }
   #sources { padding-left: 16px; margin: 4px 0; color: var(--muted); font-size: 12px; }
-  .ok { color: #6fcf97; } .bad { color: var(--major); }
-  #loading { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--panel);
+  .ok { color: var(--good); } .bad { color: var(--major); }
+  #loading { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--glass);
     border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px; color: var(--muted); }
   a { color: var(--accent); }
   @media (max-width: 760px) {
     .panel { position: relative; top: auto; left: auto; right: auto; width: auto; margin: 8px 16px; max-height: none; }
     body { overflow-y: auto; }
     #view { position: relative; height: 60vh; }
+    button, select, input[type=search], label, input[type=range] { min-height: 44px; }
   }
 </style>
 <script type="importmap">
@@ -67,12 +66,15 @@
 
 <aside id="left" class="panel">
   <h1>Charleston Flood &amp; Heat Risk</h1>
-  <div class="sub">Drag to pan, right-drag to rotate, scroll to zoom, click to inspect.</div>
+  <div class="sub" id="howto">Drag to pan, right-drag to rotate, scroll to zoom, click to inspect.</div>
+
+  <h2>Address</h2>
+  <div id="addr"></div>
 
   <h2>Time</h2>
   <div id="when">…</div>
   <div class="sub" id="whenRel"></div>
-  <input id="time" type="range" min="0" max="216" value="48">
+  <input id="time" type="range" aria-label="Time" min="0" max="216" value="48">
   <div class="row"><button id="play">▶ Play</button><button id="now">Now</button>
     <span class="sub">−48 h observed · +7 d forecast</span></div>
 
@@ -87,27 +89,27 @@
 
   <h2>Future scenarios</h2>
   <div class="grid2">
-    <div><div class="sub">NOAA 2022 sea level rise</div><select id="slrScen"></select></div>
-    <div><div class="sub">Year</div><select id="slrYear">
+    <div><div class="sub">NOAA 2022 sea level rise</div><select id="slrScen" aria-label="NOAA 2022 sea level rise scenario"></select></div>
+    <div><div class="sub">Year</div><select id="slrYear" aria-label="Sea level rise year">
       <option value="0">Today</option><option>2030</option><option>2040</option><option>2050</option>
       <option>2060</option><option>2080</option><option>2100</option></select></div>
   </div>
   <div class="sub" style="margin-top:6px">Storm surge what-if: <b id="surgeV">+0.0 ft</b></div>
-  <input id="surge" type="range" min="0" max="10" step="0.5" value="0">
+  <input id="surge" type="range" aria-label="Storm surge what-if" min="0" max="10" step="0.5" value="0">
 
   <h2>Rain model calibration</h2>
   <div class="sub">Drainage + infiltration: <b id="drainV">1.00 in/h</b></div>
-  <input id="drain" type="range" min="0" max="2" step="0.05" value="1">
+  <input id="drain" type="range" aria-label="Drainage + infiltration" min="0" max="2" step="0.05" value="1">
   <div class="sub">Runoff concentration into low spots: <b id="concV">4×</b></div>
-  <input id="conc" type="range" min="1" max="20" step="1" value="4">
+  <input id="conc" type="range" aria-label="Runoff concentration into low spots" min="1" max="20" step="1" value="4">
   <div class="sub">Drainage drops to zero as the harbor rises from MHHW to minor flood stage (outfalls submerged).
     Defaults fit the 15 City flood closures of Oct 4, 2026 (12 of 15 reproduced) — one event, so treat as a starting point.</div>
 
   <h2>View</h2>
   <button id="recenter" style="margin-bottom:6px">Recenter on 29401 / 29403</button>
-  <select id="basemap" style="margin-bottom:6px"><option value="dark">Dark basemap</option><option value="satellite">Satellite</option></select>
+  <select id="basemap" aria-label="Basemap" style="margin-bottom:6px"><option value="dark">Dark basemap</option><option value="light">Light basemap</option><option value="satellite">Satellite</option></select>
   <div class="sub">Vertical exaggeration: <b id="exagV">12×</b></div>
-  <input id="exag" type="range" min="1" max="40" value="12">
+  <input id="exag" type="range" aria-label="Vertical exaggeration" min="1" max="40" value="12">
 
   <h2>Legend</h2>
   <div class="sub">Flooded land, by depth</div>
@@ -121,10 +123,10 @@
   <div class="ticks"><span style="left:0">70</span><span style="left:18.2%">80</span><span style="left:36.4%">90</span><span style="left:60%">103</span><span style="left:100%">125</span></div>
   <div class="sub" style="margin-top:6px"><span style="color:#9e5cf2">■</span> FEMA 1% annual chance (AE/VE) &nbsp;
     <span style="color:#ff8c00">■</span> 0.2%</div>
-  <div class="sub"><span style="color:#e8eef5">━</span> storm pipe &nbsp; <span style="color:#9ad8ff">•</span> storm inlet &nbsp;
+  <div class="sub"><span style="color:var(--pipe)">━</span> storm pipe &nbsp; <span style="color:var(--inlet)">•</span> storm inlet &nbsp;
     <span style="color:#2eb852">■</span> tree canopy</div>
-  <div class="sub"><span style="color:#ff5a5a">■</span> flood closure &nbsp;
-    <span style="color:#ffb020">■</span> other closure</div>
+  <div class="sub"><span style="color:var(--flood-closure)">■</span> flood closure &nbsp;
+    <span style="color:var(--closure)">■</span> other closure</div>
 </aside>
 
 <aside id="right" class="panel">
@@ -134,10 +136,10 @@
     <span id="wlCat" class="tag"></span>
   </div>
   <div class="sub" id="wlNote"></div>
-  <canvas id="tideChart" class="chart"></canvas>
-  <div class="sub" style="font-size:11px"><span style="color:#4cc3ff">━</span> observed
-    <span style="color:#4cc3ff">┅</span> NWS forecast <span style="color:#2dd4bf">┅</span> STOFS
-    <span style="color:#8b98a8">━</span> astronomical <span style="color:#50dcaa">▮</span> rain</div>
+  <canvas id="tideChart" class="chart" role="img" aria-label="Harbor water level chart, loading"></canvas>
+  <div class="sub" style="font-size:11px"><span style="color:var(--accent)">━</span> observed
+    <span style="color:var(--accent)">┅</span> NWS forecast <span style="color:#2dd4bf">┅</span> STOFS
+    <span style="color:var(--muted)">━</span> astronomical <span style="color:#50dcaa">▮</span> rain</div>
 
   <h2>Weather at selected hour (downtown)</h2>
   <div class="kv" id="wx"></div>

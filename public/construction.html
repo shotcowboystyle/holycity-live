@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Construction Near Me · Holy City Live</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="dash.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
@@ -14,14 +15,14 @@
   <div class="sub">City of Charleston permits, road closures and open code cases around an address. Click the map to move.</div>
   <h2>Where</h2>
   <div id="addr"></div>
-  <div class="row" style="margin-top:6px"><span class="sub" style="flex:0 0 auto">Within</span>
+  <div class="row" style="margin-top:6px"><label for="radius" class="sub" style="flex:0 0 auto">Within</label>
     <select id="radius"><option value="402">¼ mile</option><option value="805" selected>½ mile</option><option value="1609">1 mile</option></select></div>
 
   <h2>Permit types</h2>
   <div id="cats"></div>
 
-  <div class="swatches"><span><i style="background:#ffb020"></i>closure</span><span><i style="background:#ff5a5a"></i>flood closure</span>
-    <span><i style="background:#c084fc"></i>scheduled closure</span><span><i style="border:1.5px solid #ff7eb6"></i>open code case</span>
+  <div class="swatches"><span><i style="background:var(--closure)"></i>closure</span><span><i style="background:var(--flood-closure)"></i>flood closure</span>
+    <span><i style="background:var(--scheduled-closure)"></i>scheduled closure</span><span><i style="border:1.5px solid var(--code-case)"></i>open code case</span>
     <span class="sub">dot size = declared value</span></div>
 
   <h2>Summary</h2>
@@ -45,7 +46,7 @@
 </aside>
 <div id="map"></div>
 <script type="module">
-import { CITY, $, esc, money, day, near, query, makeMap, addressBox, bars } from './dash.js';
+import { CITY, $, esc, money, day, near, query, makeMap, addressBox, bars, failed, cssVar, param, setParam } from './dash.js';
 
 const PERMITS = `${CITY}/Applications/MapServer/20`, CASES = `${CITY}/Applications/MapServer/59`, CLOSURES = `${CITY}/RoadClosuresViewer/MapServer`;
 // Category from the permit's type + work class. First match wins.
@@ -64,8 +65,9 @@ const map = makeMap('map');
 const layer = L.layerGroup().addTo(map);
 let here = null, data = null, seq = 0;
 map.on('click', e => box.pick({ label: `Map point ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`, lat: e.latlng.lat, lon: e.latlng.lng }));
+if ([...$('radius').options].some(o => o.value === param('r'))) $('radius').value = param('r');
 const box = addressBox($('addr'), place => { here = place; load(); });
-$('radius').onchange = () => here && load();
+$('radius').onchange = () => { setParam('r', $('radius').value); if (here) load(); };
 $('cats').onchange = () => data && render();
 
 async function load() {
@@ -77,12 +79,13 @@ async function load() {
     query(CASES, { ...geo, where: "CASE_STATUS IN ('Opened','Unresolved','Hold')", outFields: 'CASE_NUMBER,CASE_TYPE,CASE_STATUS,OPENED_DATE,DESCRIPTION,MAIN_ADDRESS_LINE1' }),
     ...[1, 5, 11].map(l => query(`${CLOSURES}/${l}`, { ...geo, where: l === 11 ? '1=1' : "IS_DRILL IS NULL OR IS_DRILL <> 'Yes'", outFields: 'OBJECTID,STREET,LOCATION,REASON,TYPE,STATUS,START,END_' })
       .then(d => (d.features.forEach(f => { f.properties.future = l === 11; }), d))),
-  ]).catch(e => { $('status').innerHTML = `<span class="bad">Load failed: ${esc(e.message)}</span>`; return []; }); // shown in panel; keep last results
+  ]).catch(e => { failed($('status'), 'City permit data', e, load); return []; }); // shown in panel; keep last results
   if (mySeq !== seq || !permits) return; // failed, or a newer search started
   const seen = new Set(); // the EM closure layer repeats features from the main layer
   data = { r, permits: permits.features, cases: cases.features,
     closures: closures.flatMap(d => d.features).filter(f => !seen.has(f.properties.OBJECTID) && seen.add(f.properties.OBJECTID)) };
   $('status').textContent = `Updated ${new Date().toLocaleTimeString()}.`;
+  map.fitBounds(L.latLng(here.lat, here.lon).toBounds(r * 2.2)); // only on a new place or radius, so filtering keeps the user's view
   render();
 }
 
@@ -92,19 +95,19 @@ function render() {
   const permits = data.permits.map(f => ({ f, p: f.properties, c: catOf(f.properties) })).filter(x => on.has(x.c))
     .sort((a, b) => (b.p.ISSUE_DATE ?? b.p.APPLICATION_DATE ?? 0) - (a.p.ISSUE_DATE ?? a.p.APPLICATION_DATE ?? 0));
   layer.clearLayers();
-  L.circle([here.lat, here.lon], { radius: data.r, color: '#4cc3ff', weight: 1, fillOpacity: 0.04 }).addTo(layer);
-  L.circleMarker([here.lat, here.lon], { radius: 6, color: '#fff', weight: 2, fillColor: '#4cc3ff', fillOpacity: 1 }).addTo(layer).bindTooltip(esc(here.label));
+  const accent = cssVar('--accent');
+  L.circle([here.lat, here.lon], { radius: data.r, color: accent, weight: 1, fillOpacity: 0.04 }).addTo(layer);
+  L.circleMarker([here.lat, here.lon], { radius: 6, color: '#fff', weight: 2, fillColor: accent, fillOpacity: 1 }).addTo(layer).bindTooltip(esc(here.label));
   const markers = permits.map(({ f, p, c }) => L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]],
     { radius: p.VALUATION > 1e6 ? 6 : p.VALUATION > 1e5 ? 4.5 : 3, color: '#0b0f14', weight: 0.5, fillColor: CATS[c][1], fillOpacity: 0.85 })
     .bindPopup(`<b>${esc(p.PERMIT_ADDRESS_LINE1)}</b><br>${esc(p.PERMIT_TYPE)} · ${esc(p.WORK_CLASS)}<br>${esc(p.PERMIT_STATUS)} · issued ${day(p.ISSUE_DATE)}<br>Value ${money(p.VALUATION)}${p.SQUARE_FEET ? ` · ${p.SQUARE_FEET.toLocaleString()} sq ft` : ''}<br><span class="sub">${esc((p.DESCRIPTION ?? '').slice(0, 220))}</span><br><span class="sub">#${esc(p.PERMIT_NUMBER)}</span>`).addTo(layer));
   for (const f of data.closures) {
     const p = f.properties, flood = /FLOOD/i.test(p.REASON ?? '');
-    L.geoJSON(f, { style: { color: flood ? '#ff5a5a' : p.future ? '#c084fc' : '#ffb020', weight: 3, opacity: 0.9, dashArray: p.future ? '5 5' : null } })
+    L.geoJSON(f, { style: { color: cssVar(flood ? '--flood-closure' : p.future ? '--scheduled-closure' : '--closure'), weight: 3, opacity: 0.9, dashArray: p.future ? '5 5' : null } })
       .bindPopup(`<b>${esc(p.STREET)}</b><br>${esc(p.LOCATION ?? '')}<br>${esc(p.TYPE ?? '')} · ${esc(p.REASON ?? '')}<br>${day(p.START)} → ${day(p.END_)}${p.future ? ' (scheduled)' : ''}`).addTo(layer);
   }
-  for (const f of data.cases) L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]], { radius: 4, color: '#ff7eb6', weight: 1.5, fillOpacity: 0, })
+  for (const f of data.cases) L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]], { radius: 4, color: cssVar('--code-case'), weight: 1.5, fillOpacity: 0 })
     .bindPopup(`<b>${esc(f.properties.MAIN_ADDRESS_LINE1)}</b><br>${esc(f.properties.CASE_TYPE)}<br>${esc(f.properties.CASE_STATUS)} since ${day(f.properties.OPENED_DATE)}`).addTo(layer);
-  map.fitBounds(L.latLng(here.lat, here.lon).toBounds(data.r * 2.2));
 
   $('nPermits').textContent = permits.length.toLocaleString();
   $('value').textContent = money(permits.reduce((s, x) => s + (x.p.VALUATION ?? 0), 0));
@@ -113,10 +116,10 @@ function render() {
   bars($('byCat'), CATS.map(([n, color], i) => [n, permits.filter(x => x.c === i).length, color]).filter((_, i) => on.has(i)));
   $('closures').innerHTML = data.closures.map(f => { const p = f.properties; return `<li><b>${esc(p.STREET)}</b> <span class="meta">${esc(p.REASON ?? '')}${p.future ? ' · scheduled' : ''}</span>
     <div class="meta">${esc(p.LOCATION ?? '')} · ${day(p.START)} → ${day(p.END_)}</div></li>`; }).join('') || '<li class="sub">None in range.</li>';
-  $('permits').innerHTML = permits.slice(0, 150).map(({ p, c }, i) => `<li data-i="${i}"><span class="dot" style="background:${CATS[c][1]}"></span><b>${esc(p.PERMIT_ADDRESS_LINE1)}</b> · ${money(p.VALUATION)}
-    <div class="meta">${esc(p.PERMIT_TYPE)} · ${esc(p.WORK_CLASS)} · ${esc(p.PERMIT_STATUS)} · ${day(p.ISSUE_DATE ?? p.APPLICATION_DATE)}${(p.ISSUE_DATE ?? 0) > now ? ' (future-dated)' : ''}</div></li>`).join('')
+  $('permits').innerHTML = permits.slice(0, 150).map(({ p, c }, i) => `<li><button type="button" class="pick" data-i="${i}"><span class="dot" style="background:${CATS[c][1]}"></span><b>${esc(p.PERMIT_ADDRESS_LINE1)}</b> · ${money(p.VALUATION)}
+    <div class="meta">${esc(p.PERMIT_TYPE)} · ${esc(p.WORK_CLASS)} · ${esc(p.PERMIT_STATUS)} · ${day(p.ISSUE_DATE ?? p.APPLICATION_DATE)}${(p.ISSUE_DATE ?? 0) > now ? ' (future-dated)' : ''}</div></button></li>`).join('')
     + (permits.length > 150 ? `<li class="sub">+ ${permits.length - 150} more on the map</li>` : '') || '<li class="sub">None in range.</li>';
-  $('permits').onclick = e => { const li = e.target.closest('li[data-i]'); if (li) { const m = markers[+li.dataset.i]; map.setView(m.getLatLng(), 18); m.openPopup(); } };
+  $('permits').onclick = e => { const li = e.target.closest('[data-i]'); if (li) { const m = markers[+li.dataset.i]; map.setView(m.getLatLng(), 18); m.openPopup(); } };
   $('cases').innerHTML = data.cases.slice(0, 60).map(f => `<li><b>${esc(f.properties.MAIN_ADDRESS_LINE1)}</b><div class="meta">${esc(f.properties.CASE_TYPE)} · ${esc(f.properties.CASE_STATUS)} since ${day(f.properties.OPENED_DATE)}</div></li>`).join('') || '<li class="sub">None open in range.</li>';
 }
 if (!here) box.pick({ label: '80 Broad St, 29401 (City Hall) — search to change', lat: 32.77672, lon: -79.93081 }, false);
