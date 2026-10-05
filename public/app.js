@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
+import { addressBox, cssVar, lightTheme, phoneLayout, param, setParam } from './dash.js';
 
 // ---------- config ----------
 const BBOX = { w: -80.10, e: -79.78, s: 32.68, n: 32.88 };
@@ -45,6 +46,7 @@ const T0 = Math.floor(Date.now() / 3.6e6) * 3600 - BACK * 3600; // unix seconds,
 const tAt = i => T0 + i * 3600;
 const coopsTime = s => Date.parse(s.replace(' ', 'T') + 'Z') / 1000;
 const fmt = (v, d = 1) => (v == null || Number.isNaN(v) ? '—' : v.toFixed(d));
+const whenText = t => new Date(t * 1000).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric' });
 const localHour = t => +new Date(t * 1000).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' });
 async function getJSON(url) {
   const r = await fetch(url);
@@ -83,11 +85,16 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 view.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0b0f14);
+scene.background = new THREE.Color(cssVar('--bg'));
 const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 400);
 camera.position.set(0, 16, 17);
 const controls = new MapControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.maxPolarAngle = 1.35; controls.minDistance = 0.8; controls.maxDistance = 70;
+if (phoneLayout()) { // the map sits in a scrolling page: one finger scrolls it, two fingers pan and zoom the map
+  controls.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
+  renderer.domElement.style.touchAction = 'pan-y'; // MapControls sets 'none'
+  $('howto').textContent = 'Two fingers to pan and zoom, tap to inspect.';
+}
 function resize() {
   renderer.setSize(view.clientWidth, view.clientHeight);
   camera.aspect = view.clientWidth / view.clientHeight; camera.updateProjectionMatrix();
@@ -241,23 +248,26 @@ const terrainP = source('USGS 3DEP elevation', (async () => {
   applyExag();
   $('loading').style.display = 'none';
 })());
+terrainP.then(ok => { if (!ok) $('loading').textContent = "USGS elevation didn't load, so flood depths are unavailable. See Data sources."; });
 
 const ESRI = 'https://services.arcgisonline.com/arcgis/rest/services';
-const BASEMAPS = {
-  dark: (z, x, y) => `${ESRI}/Canvas/World_Dark_Gray_Base/MapServer/tile/${z}/${y}/${x}`,
-  satellite: (z, x, y) => `${ESRI}/World_Imagery/MapServer/tile/${z}/${y}/${x}`,
+const canvas = name => (z, x, y) => `${ESRI}/Canvas/${name}/MapServer/tile/${z}/${y}/${x}`;
+const BASEMAPS = { // [base, labels]
+  dark: [canvas('World_Dark_Gray_Base'), canvas('World_Dark_Gray_Reference')],
+  light: [canvas('World_Light_Gray_Base'), canvas('World_Light_Gray_Reference')],
+  satellite: [(z, x, y) => `${ESRI}/World_Imagery/MapServer/tile/${z}/${y}/${x}`, canvas('World_Dark_Gray_Reference')],
 };
-const labels = (z, x, y) => `${ESRI}/Canvas/World_Dark_Gray_Reference/MapServer/tile/${z}/${y}/${x}`;
 const baseTex = {};
 function setBasemap(name) { // z14: street-level labels for the zoomed-in peninsula view
-  baseTex[name] ??= source(`Esri ${name} basemap`, mosaic(Z + 1, BASEMAPS[name], labels).then(c => {
+  baseTex[name] ??= source(`Esri ${name} basemap`, mosaic(Z + 1, ...BASEMAPS[name]).then(c => {
     const t = new THREE.CanvasTexture(c);
     t.anisotropy = renderer.capabilities.getMaxAnisotropy();
     return t;
   }));
   baseTex[name].then(t => { if (t && $('basemap').value === name) uniforms.uBase.value = t; });
 }
-setBasemap('dark');
+if (lightTheme() && $('basemap').value === 'dark') $('basemap').value = 'light';
+setBasemap($('basemap').value);
 
 source('FEMA NFHL flood zones', new Promise((res, rej) => new THREE.TextureLoader().load(
   `${FEMA}/export?bbox=${EXTENT_3857}&bboxSR=3857&imageSR=3857&size=2048,${Math.round(2048 * PH / PW)}&dpi=40&layers=show:28&format=png32&transparent=true&f=image`,
@@ -449,7 +459,7 @@ function buildRoads() {
     for (const l of lines) for (let i = 1; i < l.length; i++) seg[k].push(...v3(l[i - 1]), ...v3(l[i]));
     pts[k].push(...v3(lines[0][0]));
   }
-  for (const [k, color] of [['other', 0xffb020], ['flood', 0xff5a5a]]) { addLines(roads, seg[k], color); addPoints(roads, pts[k], color, 7); }
+  for (const [k, color] of [['other', cssVar('--closure')], ['flood', cssVar('--flood-closure')]]) { addLines(roads, seg[k], color); addPoints(roads, pts[k], color, 7); }
 }
 
 // ---------- stormwater + tree canopy (lazy: fetched the first time a layer is switched on) ----------
@@ -478,8 +488,8 @@ function buildStorm() {
   const seg = [];
   for (const f of [...S.storm.dupont, ...S.storm.county])
     for (const l of linesOf(f.geometry)) for (let i = 1; i < l.length; i++) seg.push(...drape(l[i - 1], 0.01), ...drape(l[i], 0.01));
-  addLines(storm, seg, 0xe8eef5);
-  addPoints(storm, S.storm.inlets.flatMap(f => drape(f.geometry.coordinates, 0.01)), 0x9ad8ff, 2);
+  addLines(storm, seg, cssVar('--pipe'));
+  addPoints(storm, S.storm.inlets.flatMap(f => drape(f.geometry.coordinates, 0.01)), cssVar('--inlet'), 2);
 }
 const loadTex = url => new Promise((res, rej) => new THREE.TextureLoader().load(url, t => { t.anisotropy = renderer.capabilities.getMaxAnisotropy(); res(t); }, undefined, () => rej(new Error('export failed'))));
 const cityExport = (svc, layer, w) => { // dynamicLayers drops the City's baked-in value labels
@@ -628,8 +638,9 @@ function updateSlr() {
 
 function update() {
   const t = tAt(S.i), rel = S.i - BACK;
-  $('when').textContent = new Date(t * 1000).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric' });
+  $('when').textContent = whenText(t);
   $('whenRel').textContent = rel === 0 ? 'Now' : rel < 0 ? `${-rel} h ago (observed)` : `+${rel} h (forecast)`;
+  $('time').setAttribute('aria-valuetext', `${$('when').textContent}, ${$('whenRel').textContent}`);
 
   // flood
   const base = waterFt(t), T = S.tide;
@@ -712,17 +723,21 @@ function drawChart() {
     g.stroke();
   };
   const astro = Array.from({ length: N }, (_, i) => T.pred.get(tAt(i)));
-  g.globalAlpha = 0.35; line(astro, '#8b98a8', () => true); g.globalAlpha = 1;
+  const accent = cssVar('--accent'), muted = cssVar('--muted'), text = cssVar('--text');
+  g.globalAlpha = 0.35; line(astro, muted, () => true); g.globalAlpha = 1;
   const src = S.wl.src, joined = name => i => src[i] === name || src[i + 1] === name; // overlap one step so segments touch
-  line(vals, '#4cc3ff', joined('Observed'));
-  g.setLineDash([4, 3]); line(vals, '#4cc3ff', joined(WL_SOURCES[0][0]));
+  line(vals, accent, joined('Observed'));
+  g.setLineDash([4, 3]); line(vals, accent, joined(WL_SOURCES[0][0]));
   line(vals, '#2dd4bf', joined(WL_SOURCES[1][0]));
-  g.setLineDash([1, 3]); line(vals, '#cbd5e1', joined(WL_SOURCES[2][0]));
+  g.setLineDash([1, 3]); line(vals, text, joined(WL_SOURCES[2][0]));
   if (off) { g.setLineDash([]); line(vals.map(v => v == null ? null : v + off), '#c084fc', () => true); }
   g.setLineDash([]);
-  g.fillStyle = '#8b98a8'; g.font = '10px system-ui'; g.fillText('now', X(BACK) + 3, 10);
-  g.strokeStyle = '#8b98a8'; g.beginPath(); g.moveTo(X(BACK), 0); g.lineTo(X(BACK), H); g.stroke();
-  g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.moveTo(X(S.i), 0); g.lineTo(X(S.i), H); g.stroke();
+  g.fillStyle = muted; g.font = '10px system-ui'; g.fillText('now', X(BACK) + 3, 10);
+  g.strokeStyle = muted; g.beginPath(); g.moveTo(X(BACK), 0); g.lineTo(X(BACK), H); g.stroke();
+  g.strokeStyle = text; g.lineWidth = 2; g.beginPath(); g.moveTo(X(S.i), 0); g.lineTo(X(S.i), H); g.stroke();
+  let peak = BACK; for (let i = BACK; i < N; i++) if ((vals[i] ?? -Infinity) > (vals[peak] ?? -Infinity)) peak = i;
+  c.setAttribute('aria-label', `Harbor water level: ${fmt(vals[BACK])} ft MLLW now; forecast peak ${fmt(vals[peak])} ft ${whenText(tAt(peak))}`
+    + `. Minor flood stage ${fmt(T.thr.minor)} ft.`);
 }
 
 // ---------- inspector ----------
@@ -746,10 +761,10 @@ function inspect(u, v, fetchZone) {
   const rows = [['Location', `${lat.toFixed(4)}, ${lon.toFixed(4)}`], ['Ground elevation', `${fmt(elevFt, 1)} ft NAVD88`]];
   if (S.tide && uniforms.uWater.value > -90) {
     const d = uniforms.uWater.value / FT - elevFt;
-    rows.push(['Tidal water', d > 0 ? `<b style="color:#33ccff">${fmt(d, 1)} ft deep</b>` : `${fmt(-d, 1)} ft above water`]);
+    rows.push(['Tidal water', d > 0 ? `<b style="color:var(--accent)">${fmt(d, 1)} ft deep</b>` : `${fmt(-d, 1)} ft above water`]);
   }
   const rd = rainDepthAt(u, v);
-  if (S.rain) rows.push(['Rain ponding', rd >= 0.01 ? `<b style="color:#50dcaa">${fmt(rd / 0.0254, 1)} in</b>` : 'none']);
+  if (S.rain) rows.push(['Rain ponding', rd >= 0.01 ? `<b style="color:var(--good)">${fmt(rd / 0.0254, 1)} in</b>` : 'none']);
   const Tg = gridVal(t, 'temperature_2m', u, v), RH = gridVal(t, 'relative_humidity_2m', u, v);
   if (Tg != null) {
     const U = uhiFor(t), px = U && Math.min(U.W - 1, Math.round(u * (U.W - 1))) + Math.min(U.H - 1, Math.round((1 - v) * (U.H - 1))) * U.W;
@@ -791,10 +806,13 @@ function inspect(u, v, fetchZone) {
 // ---------- UI wiring ----------
 $('time').max = N - 1;
 $('time').addEventListener('input', e => { S.i = +e.target.value; update(); });
-$('now').onclick = () => { S.i = BACK; $('time').value = BACK; update(); };
+// shareable time: ?t=unix seconds, written when the user settles on an hour (not on every step, browsers rate-limit URL updates)
+const saveTime = () => setParam('t', S.i === BACK ? null : tAt(S.i));
+$('time').addEventListener('change', saveTime);
+$('now').onclick = () => { S.i = BACK; $('time').value = BACK; update(); saveTime(); };
 let timer = null;
 $('play').onclick = () => {
-  if (timer) { clearInterval(timer); timer = null; $('play').textContent = '▶ Play'; return; }
+  if (timer) { clearInterval(timer); timer = null; $('play').textContent = '▶ Play'; saveTime(); return; }
   $('play').textContent = '❚❚ Pause';
   timer = setInterval(() => { S.i = (S.i + 1) % N; $('time').value = S.i; update(); }, 200);
 };
@@ -814,10 +832,28 @@ $('slrScen').onchange = updateSlr; $('slrYear').onchange = updateSlr;
 $('surge').addEventListener('input', e => { S.surgeFt = +e.target.value; $('surgeV').textContent = `+${S.surgeFt.toFixed(1)} ft`; update(); });
 $('exag').addEventListener('input', e => { exag = +e.target.value; $('exagV').textContent = `${exag}×`; if (heights) applyExag(); });
 addEventListener('resize', drawChart);
+// shareable layers: ?layers=flood,rain,… (omitted while they match the page defaults)
+const LAYERS = ['lFlood', 'lRain', 'lHeat', 'lFema', 'lRoads', 'lStorm', 'lCanopy'], layerName = id => id.slice(1).toLowerCase();
+if (param('layers') != null) { const on = param('layers').split(','); for (const id of LAYERS) $(id).checked = on.includes(layerName(id)); }
+for (const id of LAYERS) $(id).addEventListener('change', () => setParam('layers', LAYERS.every(l => $(l).checked === $(l).defaultChecked) ? null
+  : LAYERS.filter(l => $(l).checked).map(layerName).join(',') || 'none'));
+const tShared = (+param('t') - T0) / 3600;
+if (Number.isInteger(tShared) && tShared >= 0 && tShared < N) $('time').value = tShared; // a shared hour outside the window falls back to now
 // browsers restore form state on reload; push it into the scene
-for (const id of ['lFlood', 'lRain', 'lFema', 'lRoads', 'lStorm', 'lCanopy', 'basemap']) if (id !== 'basemap' || $(id).value !== 'dark') $(id).dispatchEvent(new Event('change'));
+for (const id of ['lFlood', 'lRain', 'lFema', 'lRoads', 'lStorm', 'lCanopy']) $(id).dispatchEvent(new Event('change'));
 for (const id of ['surge', 'exag', 'drain']) $(id).dispatchEvent(new Event('input'));
 S.i = +$('time').value;
+
+// Address search (shared with the other tabs): inspect that spot and bring it to the middle of the view
+addressBox($('addr'), place => terrainP.then(() => {
+  const [u, v] = lonlat2uv(place.lon, place.lat);
+  if (!heights) return; // elevation failed: the loading note already says so
+  if (u < 0 || u > 1 || v < 0 || v > 1) { $('inspect').textContent = `${place.label} is outside this map.`; return; }
+  const [x, z] = uv2xz(u, v), shift = new THREE.Vector3(x, 0, z).sub(controls.target);
+  controls.target.add(shift); camera.position.add(shift);
+  marker.position.set(x, disp(elevAt(u, v)), z); marker.visible = true;
+  lastPick = [u, v]; inspect(u, v, true);
+}));
 
 const frame = ms => { uniforms.uTime.value = ms / 1000; controls.update(); renderer.render(scene, camera); };
 renderer.setAnimationLoop(frame);

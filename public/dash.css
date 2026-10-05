@@ -1,8 +1,4 @@
-/* Shared look for the 2D dashboards (construction, safety, services). Matches risk.html's palette. */
-:root {
-  --bg: #0b0f14; --panel: #0f141c; --card: #131a24; --line: #253041; --text: #e6edf3;
-  --muted: #8b98a8; --accent: #4cc3ff; --warn: #f2994a; --bad: #eb5757; --good: #6fcf97;
-}
+/* Shared look for the 2D dashboards (construction, safety, services). Colors come from tokens.css. */
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -14,10 +10,11 @@ h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: v
 .sub { color: var(--muted); font-size: 12px; }
 .bad { color: var(--bad); } .ok { color: var(--good); }
 label { display: flex; align-items: center; gap: 8px; margin: 3px 0; cursor: pointer; }
-input[type=text], input[type=search], select { width: 100%; background: #111823; color: var(--text); border: 1px solid var(--line);
+input[type=text], input[type=search], select { width: 100%; background: var(--control-bg); color: var(--text); border: 1px solid var(--control-line);
   border-radius: 6px; padding: 6px 8px; font: inherit; }
-button { background: #16202d; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; font: inherit; }
-button:hover, input:focus, select:focus { border-color: var(--accent); outline: none; }
+button { background: var(--button-bg); color: var(--text); border: 1px solid var(--control-line); border-radius: 6px; padding: 5px 10px; cursor: pointer; font: inherit; }
+button:hover, input:focus, select:focus { border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .row { display: flex; gap: 6px; align-items: center; }
 .row > * { flex: 1; } .row > button { flex: 0 0 auto; }
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
@@ -32,8 +29,10 @@ button:hover, input:focus, select:focus { border-color: var(--accent); outline: 
 .bars .bar { height: 10px; border-radius: 3px; background: var(--accent); }
 .bars .val { text-align: right; font-variant-numeric: tabular-nums; }
 .list { list-style: none; padding: 0; margin: 0; }
-.list li { padding: 7px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
-.list li:hover { background: #121a25; }
+.list li { padding: 7px 0; border-bottom: 1px solid var(--line); }
+.list li:has(> .pick) { padding: 0; }
+.list .pick { display: block; width: 100%; padding: 7px 0; background: none; border: 0; border-radius: 0; color: inherit; text-align: left; }
+.list .pick:hover { background: var(--hover); }
 .list .meta { color: var(--muted); font-size: 11px; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
 .swatches { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 11px; color: var(--muted); margin: 4px 0; }
@@ -46,11 +45,16 @@ svg.chart text { fill: var(--muted); font-size: 9px; }
 .leaflet-container { background: var(--bg); font: inherit; }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--card); color: var(--text); border: 1px solid var(--line); }
 .leaflet-popup-content { margin: 10px 12px; font-size: 12px; }
-.leaflet-bar a { background: var(--card); color: var(--text); border-color: var(--line); }
-.leaflet-control-attribution { background: rgba(11, 15, 20, .8) !important; color: var(--muted); }
+.leaflet-bar a { background: var(--card); color: var(--text); border-color: var(--control-line); }
+.leaflet-control-attribution { background: color-mix(in srgb, var(--bg) 80%, transparent) !important; color: var(--muted); }
+.map-hint { background: var(--glass); color: var(--muted); padding: 2px 8px; border-radius: 99px; font-size: 11px; }
 .leaflet-control-attribution a { color: var(--accent); }
 @media (max-width: 760px) {
-  body { display: block; overflow: auto; height: auto; }
-  aside.side { border-right: 0; border-bottom: 1px solid var(--line); }
-  #map { height: 60vh; }
+  /* map first, so it's on screen without scrolling past every list; sidebar follows */
+  body { display: flex; flex-direction: column; overflow: auto; height: auto; }
+  #map { order: -1; height: 50vh; flex: 0 0 auto; border-bottom: 1px solid var(--line); }
+  aside.side { border-right: 0; }
+  /* 44px touch targets */
+  button, select, input[type=text], input[type=search], label, .list .pick { min-height: 44px; }
+  .list .pick { padding: 10px 0; }
 }

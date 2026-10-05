@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Public Safety Trends · Holy City Live</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="dash.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
@@ -15,8 +16,8 @@
 
   <h2>Show</h2>
   <div class="row">
-    <select id="ds"><option value="arrests">Arrests</option><option value="contacts">Police field contacts (stops)</option></select>
-    <select id="days"><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="365">Last 12 months</option></select>
+    <select id="ds" aria-label="Dataset"><option value="arrests">Arrests</option><option value="contacts">Police field contacts (stops)</option></select>
+    <select id="days" aria-label="Period"><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="365">Last 12 months</option></select>
   </div>
 
   <h2>Summary</h2>
@@ -37,7 +38,7 @@
   <div id="teams"></div>
 
   <h2>Neighborhood shading</h2>
-  <select id="metric"></select>
+  <select id="metric" aria-label="Neighborhood shading"></select>
   <div id="legend" class="swatches"></div>
   <div class="sub">Click a subdivision for its equity profile and activity in the period. Dots are individual records.</div>
 
@@ -49,7 +50,7 @@
 </aside>
 <div id="map"></div>
 <script type="module">
-import { CITY, CITY_V1, $, esc, money, query, queryAll, makeMap, bars, columns } from './dash.js';
+import { CITY, CITY_V1, $, esc, money, query, queryAll, makeMap, bars, columns, failed } from './dash.js';
 
 const DS = {
   arrests: { layer: `${CITY_V1}/PDI_Data/MapServer/1`, date: 'ArrestDate', id: 'ArrestID', oid: 'ArrestID', cat: 'CHARGE', noun: 'arrests', catTitle: 'Top charges' },
@@ -67,7 +68,7 @@ const subLayer = L.geoJSON(null, { style: () => ({}) }).addTo(map), dots = L.lay
 let subs = [], renderers = {}, pts = [], cache = {};
 
 // ---- neighborhoods (City equity layer: one polygon per subdivision with all metrics) ----
-const equityP = Promise.all([
+const loadEquity = () => Promise.all([
   getRenderers(),
   queryAll(`${EQUITY}/10`, { where: '1=1', outFields: 'SUBDIVISION,TotPop,MedHH_Inc,PCT_Pov,PCT_HH_0_VEH,PCT_Walk,PCT_Black', maxAllowableOffset: 0.00005, geometryPrecision: 5 }, 1000),
 ]).then(([r, f]) => {
@@ -76,6 +77,7 @@ const equityP = Promise.all([
   $('metric').innerHTML = `<option value="rate">Activity per 1,000 residents (selected period)</option>`
     + Object.entries(r).map(([id, x]) => `<option value="${id}" ${id === '10' ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
 });
+let equityP = loadEquity();
 async function getRenderers() {
   const d = await query(EQUITY + '/layers', {});
   return Object.fromEntries(d.layers.map(l => { const r = l.drawingInfo.renderer; return [l.id, {
@@ -123,8 +125,9 @@ async function refresh() {
   const dsKey = $('ds').value, days = +$('days').value, d = DS[dsKey];
   $('status').textContent = 'Loading…';
   let r;
+  equityP = equityP.catch(loadEquity); // a failed load is retried, a finished one reused
   try { [r] = await Promise.all([loadPeriod(dsKey, days), equityP]); }
-  catch (e) { $('status').innerHTML = `<span class="bad">Load failed: ${esc(e.message)}</span>`; return; } // shown in panel
+  catch (e) { failed($('status'), 'City police data', e, refresh); return; } // shown in panel
   if (dsKey !== $('ds').value || days !== +$('days').value) return; // selection changed while loading
   $('total').textContent = r.total.toLocaleString(); $('totalLbl').textContent = `${d.noun}, last ${days} days`;
   const ch = r.prev ? (r.total - r.prev) / r.prev * 100 : null;

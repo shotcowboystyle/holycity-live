@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Service Days · Holy City Live</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="dash.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
@@ -22,7 +23,7 @@
 </aside>
 <div id="map"></div>
 <script type="module">
-import { CITY_V1, $, esc, getJSON, query, near, metersBetween, miles, makeMap, addressBox } from './dash.js';
+import { CITY_V1, $, esc, getJSON, query, near, metersBetween, miles, makeMap, addressBox, failed, cssVar } from './dash.js';
 
 const NET = `${CITY_V1}/mapnetExternal/MapServer`;
 const AREAS = { garbage: 10, yard: 11, sweepArea: 20, fire: 15, nbhd: 8, districts: 384, zoning: 12, fema: 377 }, SWEEP_STREETS = 19;
@@ -48,7 +49,7 @@ async function lookup(place) {
   const mySeq = ++seq, { lat, lon } = place;
   $('cards').innerHTML = '<div class="sub" style="margin-top:10px">Looking up…</div>';
   layer.clearLayers();
-  L.circleMarker([lat, lon], { radius: 7, color: '#fff', weight: 2, fillColor: '#4cc3ff', fillOpacity: 1 }).addTo(layer).bindTooltip(esc(place.label));
+  L.circleMarker([lat, lon], { radius: 7, color: '#fff', weight: 2, fillColor: cssVar('--accent'), fillOpacity: 1 }).addTo(layer).bindTooltip(esc(place.label));
   map.setView([lat, lon], Math.max(map.getZoom(), 15));
   let areas, streets, parks;
   try {
@@ -57,7 +58,7 @@ async function lookup(place) {
       identify(lat, lon, SWEEP_STREETS, 25),                     // sweeping routes: lines within ~25 m
       query(`${NET}/6`, { ...near(lat, lon, 1600), where: '1=1', outFields: 'NAME,ADDRESS,FACUSE', outSR: 4326, f: 'geojson' }),
     ]);
-  } catch (e) { $('cards').innerHTML = `<div class="card bad">Lookup failed: ${esc(e.message)}</div>`; return; } // shown in panel
+  } catch (e) { failed($('cards'), 'City service data', e, () => lookup(place)); return; } // shown in panel
   if (mySeq !== seq) return;
   const by = id => areas.filter(r => r.layerId === id).map(r => r.attributes);
   const [garbage] = by(AREAS.garbage), [yard] = by(AREAS.yard), [sweep] = by(AREAS.sweepArea), [fire] = by(AREAS.fire);
@@ -92,7 +93,7 @@ async function lookup(place) {
     const ll = L.geoJSON(f).getBounds().getCenter();
     return { p: f.properties, ll, d: metersBetween([lat, lon], [ll.lat, ll.lng]) };
   }).sort((a, b) => a.d - b.d).filter((x, i, all) => all.findIndex(y => y.p.NAME === x.p.NAME) === i).slice(0, 4);
-  for (const n of nearest) L.circleMarker(n.ll, { radius: 5, color: '#6fcf97', weight: 1, fillOpacity: 0.8 }).addTo(layer).bindTooltip(esc(n.p.NAME));
+  for (const n of nearest) L.circleMarker(n.ll, { radius: 5, color: cssVar('--good'), weight: 1, fillOpacity: 0.8 }).addTo(layer).bindTooltip(esc(n.p.NAME));
   html.push(card('Nearby parks', nearest.length ? nearest.map(n => `<div>${esc(n.p.NAME)} <span class="sub">· ${miles(n.d)}</span></div>`).join('') : '<div class="sub">None within 1 mile.</div>'));
   $('cards').innerHTML = html.join('');
 }

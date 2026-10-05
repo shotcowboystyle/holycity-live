@@ -1,0 +1,25 @@
+/* Design tokens for every page. Dark by default, light when the OS asks for it.
+   Map-layer colors (closures, pipes) are read by JS too, via getComputedStyle. */
+:root {
+  color-scheme: dark;
+  --bg: #0b0f14; --panel: #0f141c; --card: #131a24; --glass: rgba(15, 20, 28, 0.88);
+  --line: #253041; --text: #e6edf3; --muted: #8b98a8; --hover: #121a25;
+  --accent: #4cc3ff; --warn: #f2994a; --bad: #eb5757; --good: #6fcf97;
+  --minor: #f2c94c; --moderate: #f2994a; --major: #eb5757;
+  --control-bg: #111823; --button-bg: #16202d;
+  --control-line: #617187; /* form controls need 3:1 against their background */
+  --alert-bg: #1a1216;
+  --closure: #ffb020; --flood-closure: #ff5a5a; --scheduled-closure: #c084fc; --code-case: #ff7eb6;
+  --pipe: #e8eef5; --inlet: #9ad8ff;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg: #f6f8fa; --panel: #ffffff; --card: #f3f5f8; --glass: rgba(255, 255, 255, 0.9);
+    --line: #d0d7de; --text: #1f2328; --muted: #59636e; --hover: #eef2f6;
+    --accent: #0969da; --warn: #bc4c00; --bad: #cf222e; --good: #1a7f37;
+    --control-bg: #ffffff; --button-bg: #f3f5f8; --control-line: #848d97;
+    --alert-bg: #fff1f0;
+    --pipe: #3d4b5c; --inlet: #0969da;
+  }
+}
