@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "holycity-live",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    // Static files are served free without running the Worker; only the STOFS proxy runs code.
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": { "enabled": true }
+}

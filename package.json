@@ -1,0 +1,13 @@
+{
+  "name": "holycity-live",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8765",
+    "deploy": "wrangler deploy",
+    "test": "node --test src/"
+  },
+  "devDependencies": {
+    "wrangler": "^4.147.0"
+  }
+}

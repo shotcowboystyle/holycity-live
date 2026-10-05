@@ -12,12 +12,15 @@ Live civic dashboards for Charleston, SC — [holycity.live](https://holycity.li
 ## Run
 
 ```bash
-python3 server.py        # http://localhost:8765
-python3 server.py --selftest
+npm install
+npm run dev      # http://localhost:8765 (wrangler dev: static files + the STOFS proxy)
+npm test         # STOFS parser tests
+npm run deploy   # Cloudflare Workers
 ```
 
-No build step and no API keys. `server.py` serves the static files and proxies NOAA STOFS surge guidance
-(`/api/stofs`), which is published on S3 without CORS headers. Three.js and Leaflet load from CDNs.
+No build step and no API keys. The site is plain HTML/JS in `public/`, served as Cloudflare Workers static assets.
+`src/worker.js` runs only for `/api/stofs`: it proxies NOAA STOFS surge guidance (published on S3 without CORS
+headers) and caches the parsed result at the edge for 30 minutes. Three.js and Leaflet load from CDNs.
 
 ## Data sources
 
@@ -39,3 +42,7 @@ All public, fetched live in the browser:
   (12 of 15 City flood closures on Oct 4, 2026).
 - Arrests and stops measure police activity, not crime, and are located where they happened.
 - City data covers City of Charleston limits; outside them, results are partial.
+
+## License
+
+[MIT](LICENSE)
