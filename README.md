@@ -4,17 +4,17 @@ Live civic dashboards for Charleston, SC — [holycity.live](https://holycity.li
 
 | Tab | What it shows |
 | --- | --- |
-| **Flood & Heat Risk** | 3D Three.js map: tidal + storm-surge flooding, rain ponding (radar + forecast, compounding with tide), heat index with City heat-island data, FEMA zones, sea level rise scenarios, stormwater, tree canopy, air quality, NWS alerts |
-| **Construction Near Me** | City permits, road closures and open code cases around an address |
-| **Public Safety Trends** | CPD arrests and field contacts — trends, charges, patrol teams — over a neighborhood equity map |
-| **Service Days** | Trash, yard waste and street sweeping days, fire station, representatives, zoning, flood zone, nearby parks |
+| **Flood & Heat Risk** | 3D Three.js map with a plain-language ride check: where water is on the streets and when, a 48-hour strip of hourly harbor levels lit up when flooding hits, and three toggles (closed streets, heat, satellite). Under **More**: tidal + storm-surge flooding vs rain ponding, sea level rise and surge what-ifs, rain-model calibration, FEMA zones, stormwater, tree canopy, harbor chart, air quality, NWS alerts |
+| **Construction Near Me** | What's closed and what's being built around an address: closures first, the biggest projects, a 12-month permit strip, and ¼ / ½ / 1 mile. Under **More**: permit categories, full lists, code cases, older permits |
+| **Public Safety Trends** | Police activity in your neighborhood in plain words (per resident, compared with the rest of the city) and the citywide trend, over a 24-month strip. Under **More**: equity shading, charges, patrol teams |
+| **Service Days** | When the trash goes out, yard waste and street sweeping, on a two-week calendar strip. Under **More**: fire station, representatives, zoning, flood zone, nearby parks |
 
 ## Run
 
 ```bash
 npm install
 npm run dev      # http://localhost:8765 (wrangler dev: static files + the STOFS proxy)
-npm test         # STOFS parser tests
+npm test         # STOFS parser + plain-language wording tests
 npm run deploy   # Cloudflare Workers
 ```
 

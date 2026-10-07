@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
-import { addressBox, cssVar, lightTheme, phoneLayout, param, setParam } from './dash.js';
+import { addressBox, cssVar, lightTheme, param, setParam } from './dash.js';
+import { hourLevel, verdict, spotAdvice } from './ride.js';
 
 // ---------- config ----------
 const BBOX = { w: -80.10, e: -79.78, s: 32.68, n: 32.88 };
@@ -77,7 +78,7 @@ function heatIndex(T, RH) { // NWS Rothfusz regression, °F. ponytail: skips the
 const heatCat = hi => hi >= 125 ? ['Extreme danger', '#b5179e'] : hi >= 103 ? ['Danger', '#eb5757']
   : hi >= 90 ? ['Extreme caution', '#f2994a'] : hi >= 80 ? ['Caution', '#f2c94c'] : ['Low', '#6fcf97'];
 const aqiCat = a => a > 300 ? ['Hazardous', '#7e0023'] : a > 200 ? ['Very unhealthy', '#8f3f97'] : a > 150 ? ['Unhealthy', '#ff0000']
-  : a > 100 ? ['Unhealthy for sensitive', '#ff7e00'] : a > 50 ? ['Moderate', '#ffff00'] : ['Good', '#00e400'];
+  : a > 100 ? ['Unhealthy for sensitive groups', '#ff7e00'] : a > 50 ? ['Moderate', '#ffff00'] : ['Good', '#00e400'];
 
 // ---------- three.js scene ----------
 const view = $('view');
@@ -90,11 +91,8 @@ const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 400);
 camera.position.set(0, 16, 17);
 const controls = new MapControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.maxPolarAngle = 1.35; controls.minDistance = 0.8; controls.maxDistance = 70;
-if (phoneLayout()) { // the map sits in a scrolling page: one finger scrolls it, two fingers pan and zoom the map
-  controls.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
-  renderer.domElement.style.touchAction = 'pan-y'; // MapControls sets 'none'
-  $('howto').textContent = 'Two fingers to pan and zoom, tap to inspect.';
-}
+// the map fills the screen on phones too (no page scroll), so MapControls' touch defaults apply
+if (matchMedia('(pointer: coarse)').matches) $('howto').textContent = 'One finger pans, two fingers zoom and rotate, tap to inspect.';
 function resize() {
   renderer.setSize(view.clientWidth, view.clientHeight);
   camera.aspect = view.clientWidth / view.clientHeight; camera.updateProjectionMatrix();
@@ -172,17 +170,16 @@ const material = new THREE.ShaderMaterial({
       }
       if (uHeat && e > 0.3) {
         float T = gridAt(0, vUv) + (texture2D(uUhi, vUv).r * 255.0 - 128.0) / 16.0;
-        col = mix(col, heatRamp(heatIndex(T, gridAt(1, vUv))), 0.6);
+        float h = heatIndex(T, gridAt(1, vUv));
+        col = mix(col, heatRamp(h), 0.6 * smoothstep(76.0, 84.0, h)); // no tint below NWS caution (80 °F): cool blue would read as water
       }
       float rip = 0.05 * sin(vUv.x * 900.0 + uTime * 2.0) * sin(vUv.y * 700.0 - uTime * 1.6);
-      float rain = texture2D(uRain, vUv).r * 2.55;                       // ponded rain depth, m (1 cm steps)
-      if (uFlood && e < uWater && e < uMhhw) col = mix(col, vec3(0.04, 0.16, 0.30), 0.45); // normally wet: river, marsh, harbor
-      else if (uFlood && e < uWater) {                               // tidal flooding
-        float k = clamp((uWater - e) / 1.524, 0.0, 1.0);            // 0..5 ft depth ramp
-        col = mix(col, mix(vec3(0.2, 0.8, 1.0), vec3(0.0, 0.25, 0.88), k) + rip, 0.82);
-      } else if (uRainOn && rain > 0.05) {                               // rain ponding >= 2 in
-        float k = clamp(rain / 0.61, 0.0, 1.0);                          // 0..2 ft depth ramp
-        col = mix(col, mix(vec3(0.5, 0.95, 0.7), vec3(0.0, 0.6, 0.5), k) + rip, 0.82);
+      float rain = uRainOn ? texture2D(uRain, vUv).r * 2.55 : 0.0;      // ponded rain depth, m (1 cm steps)
+      float tide = uFlood ? uWater - e : 0.0;                            // tidal depth, m
+      if (tide > 0.0 && e < uMhhw) col = mix(col, vec3(0.04, 0.16, 0.30), 0.45); // normally wet: river, marsh, harbor
+      else if (tide > 0.0 || rain > 0.05) {  // water on dry land, one ramp whatever its source: any tide, rain ponding >= 2 in
+        float k = clamp(max(tide, rain) / 0.3048, 0.0, 1.0);             // 0..1 ft depth ramp (6 in+ isn't rideable)
+        col = mix(col, mix(vec3(0.31, 0.78, 1.0), vec3(0.11, 0.31, 0.88), k) + rip, 0.82);
       }
       gl_FragColor = vec4(col, 1.0);
     }`,
@@ -218,8 +215,9 @@ async function mosaic(z, ...urlFns) { // same extent at zoom z >= Z; later url f
   const g = c.getContext('2d', { willReadFrequently: true });
   const jobs = [];
   for (let x = X0 * k; x < (X1 + 1) * k; x++) for (let y = Y0 * k; y < (Y1 + 1) * k; y++)
-    jobs.push(Promise.all(urlFns.map(f => loadImg(f(z, x, y))))
-      .then(imgs => imgs.forEach(i => g.drawImage(i, (x - X0 * k) * 256, (y - Y0 * k) * 256))));
+    // a tile that fails twice is left blank: one gap beats losing the whole basemap to a transient error among hundreds
+    jobs.push(Promise.all(urlFns.map(f => loadImg(f(z, x, y)).catch(() => loadImg(f(z, x, y))).catch(() => null)))
+      .then(imgs => imgs.forEach(i => i && g.drawImage(i, (x - X0 * k) * 256, (y - Y0 * k) * 256))));
   await Promise.all(jobs);
   return c;
 }
@@ -248,7 +246,7 @@ const terrainP = source('USGS 3DEP elevation', (async () => {
   applyExag();
   $('loading').style.display = 'none';
 })());
-terrainP.then(ok => { if (!ok) $('loading').textContent = "USGS elevation didn't load, so flood depths are unavailable. See Data sources."; });
+terrainP.then(ok => { if (!ok) { $('loading').textContent = "Street elevations didn't load, so flood depths are unavailable. See More, Data sources."; update(); } });
 
 const ESRI = 'https://services.arcgisonline.com/arcgis/rest/services';
 const canvas = name => (z, x, y) => `${ESRI}/Canvas/${name}/MapServer/tile/${z}/${y}/${x}`;
@@ -258,16 +256,16 @@ const BASEMAPS = { // [base, labels]
   satellite: [(z, x, y) => `${ESRI}/World_Imagery/MapServer/tile/${z}/${y}/${x}`, canvas('World_Dark_Gray_Reference')],
 };
 const baseTex = {};
-function setBasemap(name) { // z14: street-level labels for the zoomed-in peninsula view
+const basemapName = () => $('lSat').checked ? 'satellite' : lightTheme() ? 'light' : 'dark';
+function setBasemap() { // z14: street-level labels for the zoomed-in peninsula view. First call: lSat's restored-state change event below
+  const name = basemapName();
   baseTex[name] ??= source(`Esri ${name} basemap`, mosaic(Z + 1, ...BASEMAPS[name]).then(c => {
     const t = new THREE.CanvasTexture(c);
     t.anisotropy = renderer.capabilities.getMaxAnisotropy();
     return t;
   }));
-  baseTex[name].then(t => { if (t && $('basemap').value === name) uniforms.uBase.value = t; });
+  baseTex[name].then(t => { if (t && basemapName() === name) uniforms.uBase.value = t; });
 }
-if (lightTheme() && $('basemap').value === 'dark') $('basemap').value = 'light';
-setBasemap($('basemap').value);
 
 source('FEMA NFHL flood zones', new Promise((res, rej) => new THREE.TextureLoader().load(
   `${FEMA}/export?bbox=${EXTENT_3857}&bboxSR=3857&imageSR=3857&size=2048,${Math.round(2048 * PH / PW)}&dpi=40&layers=show:28&format=png32&transparent=true&f=image`,
@@ -393,6 +391,8 @@ source('Open-Meteo air quality (CAMS)', getJSON(`https://air-quality-api.open-me
 source('NWS active alerts', getJSON(`https://api.weather.gov/alerts/active?point=${CENTER.lat},${CENTER.lon}`).then(d => {
   $('alerts').innerHTML = d.features.length ? d.features.map(f => `<div class="alert"><b>${f.properties.event}</b><br>${f.properties.headline ?? ''}</div>`).join('')
     : 'No active alerts for downtown Charleston.';
+  const events = [...new Set(d.features.map(f => f.properties.event))];
+  Object.assign($('alertPill'), { hidden: !events.length, textContent: events.join(', ') });
 })).then(ok => { if (!ok) $('alerts').textContent = 'Unavailable (see Data sources).'; });
 
 // City of Charleston heat-island temperature models: decode rendered raster back to °F via its legend ramp.
@@ -579,31 +579,39 @@ function buildRain() {
   S.rain = { cells: cells.subarray(0, used), comps, depth, tex, area: 0 };
   update();
 }
-function rainExcessIn(i) { // excess (undrained) rain storage at timeline index i, inches, per grid point
-  const drain = +$('drain').value, T = S.tide, out = new Float64Array(GNX * GNY);
-  for (let j = 0; j <= i; j++) {
+function excessSeries() { // excess (undrained) rain storage for every timeline hour, inches, per grid point
+  const drain = +$('drain').value, T = S.tide, cur = new Float64Array(GNX * GNY), out = [];
+  for (let j = 0; j < N; j++) {
     const w = waterFt(tAt(j)), f = T && w != null ? Math.min(1, Math.max(0, (T.thr.minor - w - scenarioFt()) / (T.thr.minor - T.mhhwFt))) : 1;
-    for (let p = 0; p < out.length; p++) out[p] = Math.max(0, out[p] + (rainIn(p, tAt(j)) ?? 0) - drain * f);
+    for (let p = 0; p < cur.length; p++) cur[p] = Math.max(0, cur[p] + (rainIn(p, tAt(j)) ?? 0) - drain * f);
+    out.push(Float64Array.from(cur));
   }
   return out;
 }
+function compLevel(c, ex, conc) { // rain level (m) in depression c for excess storage ex; null when it holds no water
+  const ax = Math.floor(c.gx), ay = Math.floor(c.gy), bx = Math.min(ax + 1, GNX - 1), by = Math.min(ay + 1, GNY - 1), fx = c.gx - ax, fy = c.gy - ay;
+  const s = (ex[ay * GNX + ax] * (1 - fx) + ex[ay * GNX + bx] * fx) * (1 - fy) + (ex[by * GNX + ax] * (1 - fx) + ex[by * GNX + bx] * fx) * fy;
+  const V = s * 0.0254 * conc * c.n; if (V <= 0) return null; // m × cells
+  const { sorted: e, prefix: P, n } = c;
+  if (V >= n * c.spill - P[n]) return c.spill;
+  let lo = 1, hi = n; // largest k with k·e[k−1] − P[k] ≤ V, then level = (V + P[k]) / k
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (m * e[m - 1] - P[m] <= V) lo = m; else hi = m - 1; }
+  return (V + P[lo]) / lo;
+}
+const countBelow = (a, x) => { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < x) lo = m + 1; else hi = m; } return lo; };
+function rainKm2(ex) { // land ponded ≥ 5 cm (what the map shows), straight from each depression's sorted elevations
+  if (!ex.some(v => v > 0)) return 0;
+  const conc = +$('conc').value; let wet = 0;
+  for (const c of S.rain.comps) { const L = compLevel(c, ex, conc); if (L != null) wet += countBelow(c.sorted, L - 0.05); }
+  return wet * (SW / PW) * (SD / PH);
+}
 function updateRain() {
   const R = S.rain; if (!R || !S.grid) return;
-  const ex = rainExcessIn(S.i), conc = +$('conc').value, water = uniforms.uWater.value;
+  const ex = S.excess[S.i], conc = +$('conc').value, water = uniforms.uWater.value;
   R.depth.fill(0); let wet = 0;
   for (const c of R.comps) {
-    const ax = Math.floor(c.gx), ay = Math.floor(c.gy), bx = Math.min(ax + 1, GNX - 1), by = Math.min(ay + 1, GNY - 1), fx = c.gx - ax, fy = c.gy - ay;
-    const s = (ex[ay * GNX + ax] * (1 - fx) + ex[ay * GNX + bx] * fx) * (1 - fy) + (ex[by * GNX + ax] * (1 - fx) + ex[by * GNX + bx] * fx) * fy;
-    const V = s * 0.0254 * conc * c.n; if (V <= 0) continue; // m × cells
-    const { sorted: e, prefix: P, n } = c;
-    let L;
-    if (V >= n * c.spill - P[n]) L = c.spill;
-    else { // largest k with k·e[k−1] − P[k] ≤ V, then level = (V + P[k]) / k
-      let lo = 1, hi = n;
-      while (lo < hi) { const m = (lo + hi + 1) >> 1; if (m * e[m - 1] - P[m] <= V) lo = m; else hi = m - 1; }
-      L = (V + P[lo]) / lo;
-    }
-    for (let k = c.start; k < c.start + n; k++) {
+    const L = compLevel(c, ex, conc); if (L == null) continue;
+    for (let k = c.start; k < c.start + c.n; k++) {
       const cell = R.cells[k], d = L - heights[cell]; if (d <= 0) continue;
       const x = cell % PW, y = (cell / PW) | 0;
       R.depth[(PH - 1 - y) * PW + x] = Math.min(255, Math.round(d * 100)); // texture rows run south → north
@@ -636,7 +644,59 @@ function updateSlr() {
   update();
 }
 
-function update() {
+// ---------- ride check: 48-hour strip + plain-language verdict ----------
+const STRIP = 48; // hours shown in the strip, starting now
+const TZ = 'America/New_York';
+const ymd = t => new Date(t * 1000).toLocaleDateString('en-CA', { timeZone: TZ });
+const weekday = t => new Date(t * 1000).toLocaleDateString('en-US', { timeZone: TZ, weekday: 'short' });
+const clock = t => { const h = localHour(t); return h === 12 ? 'noon' : `${h % 12 || 12} ${h < 12 ? 'am' : 'pm'}`; };
+const when = t => { // "4 pm today", "8 pm tonight", "7 am tomorrow", "noon Thu"
+  const d = ymd(t), now = tAt(BACK);
+  return `${clock(t)} ${d === ymd(now) ? (localHour(t) >= 18 ? 'tonight' : 'today') : d === ymd(now + 86400) ? 'tomorrow' : weekday(t)}`;
+};
+function hourAt(i) { // one timeline hour → { i, t, w: harbor ft MLLW incl. scenarios, level, causes }
+  const t = tAt(i), base = waterFt(t), w = base == null ? null : base + scenarioFt();
+  return { i, t, w, ...hourLevel({ waterFt: w, thr: S.tide?.thr, rainKm2: S.rain && S.grid ? rainKm2(S.excess[i]) : null }) };
+}
+function drawStrip() { // bar height = harbor level (tops out at flood stage or the peak), color = street flooding
+  S.hours = Array.from({ length: STRIP }, (_, k) => hourAt(BACK + k));
+  const ws = S.hours.map(h => h.w).filter(w => w != null);
+  const lo = Math.min(...ws), hi = Math.max(...ws, S.tide?.thr.minor ?? -Infinity);
+  $('bars').innerHTML = S.hours.map(h => `<i data-level="${h.level}" style="height:${h.w == null || !(hi > lo) ? 8 : 10 + 90 * (h.w - lo) / (hi - lo)}%"></i>`).join('');
+  drawTicks();
+}
+function drawTicks() { // a label every 6 h (12 h on narrow strips), none crowding "Now"
+  const W = $('bars').clientWidth, every = W < 480 ? 12 : 6;
+  $('ticks').innerHTML = S.hours.map((h, k) => {
+    const hr = localHour(h.t), label = k === 0 ? 'Now' : k * W / STRIP < 40 ? '' : hr === 0 ? weekday(h.t) : hr % every === 0 ? clock(h.t) : '';
+    return label && `<span style="left:${(k + 0.5) / STRIP * 100}%">${label}</span>`;
+  }).join('');
+}
+const RAIN_DEPS = ['USGS 3DEP elevation', 'NOAA CO-OPS tides, datums, flood stages', 'Open-Meteo forecast (HRRR/GFS/ECMWF blend)'];
+function renderRide() {
+  const k = S.i - BACK, sel = k >= 0 && k < STRIP ? S.hours[k] : hourAt(S.i);
+  [...$('bars').children].forEach((b, j) => b.classList.toggle('sel', j === k));
+  const { headline, detail } = S.wl ? verdict(S.hours, sel, when) : { headline: 'Checking tides and rain…', detail: '' };
+  const rainNote = S.rain && S.grid ? '' : RAIN_DEPS.every(n => ['…', 'ok'].includes(sources[n])) ? ' Still checking rain.'
+    : ' Rain data is unavailable, so this covers the tide only.';
+  $('card').dataset.level = S.wl ? sel.level : 0;
+  $('headline').textContent = headline;
+  $('detail').textContent = (detail + rainNote).trim();
+  $('strip').setAttribute('aria-valuenow', Math.max(0, Math.min(STRIP - 1, k)));
+  $('strip').setAttribute('aria-valuetext', headline);
+  const floods = S.i === BACK ? S.closures.filter(f => /FLOOD/i.test(f.properties.REASON ?? '')).length : 0; // closures are live: now only
+  Object.assign($('closuresNow'), { hidden: !floods, textContent: `${floods} ${floods === 1 ? 'street is' : 'streets are'} closed for flooding right now.` });
+  const wi = S.wx?.idx.get(sel.t), h = S.wx?.h, ai = S.aq?.idx.get(sel.t), aqi = ai == null ? null : S.aq.h.us_aqi[ai];
+  $('weather').textContent = wi == null ? '' : [
+    `${fmt(h.temperature_2m[wi], 0)}°F, feels like ${fmt(h.apparent_temperature[wi], 0)}°.`,
+    h.precipitation_probability[wi] != null && `${fmt(h.precipitation_probability[wi], 0)}% chance of rain.`,
+    aqi > 100 && `Air quality: ${aqiCat(aqi)[0].toLowerCase()}.`,
+  ].filter(Boolean).join(' ');
+}
+
+// full = false while scrubbing time: the strip and rain series only change when data or settings do
+function update(full = true) {
+  if (full) { S.excess = excessSeries(); drawStrip(); }
   const t = tAt(S.i), rel = S.i - BACK;
   $('when').textContent = whenText(t);
   $('whenRel').textContent = rel === 0 ? 'Now' : rel < 0 ? `${-rel} h ago (observed)` : `+${rel} h (forecast)`;
@@ -654,7 +714,7 @@ function update() {
     const extra = scenarioFt() ? ` Includes +${fmt(scenarioFt(), 1)} ft scenario.` : '';
     const astro = T.pred.get(t), surge = astro == null ? '' : ` Surge vs astronomical tide: ${base - astro >= 0 ? '+' : ''}${fmt(base - astro, 2)} ft.`;
     updateRain();
-    $('wlNote').textContent = `${S.wl.src[S.i]}.${surge}${extra} NWS minor ${fmt(T.thr.minor, 1)} · moderate ${fmt(T.thr.moderate, 1)} · major ${fmt(T.thr.major, 1)} ft. ${floodedArea()}`;
+    $('wlNote').textContent = `${S.wl.src[S.i]}.${surge}${extra} NWS minor ${fmt(T.thr.minor, 1)} · moderate ${fmt(T.thr.moderate, 1)} · major ${fmt(T.thr.major, 1)} ft. ${$('wlNote').checkVisibility() ? floodedArea() : ''}`; // area scan is ~35 ms: skip while the drawer hides it
   } else uniforms.uWater.value = -99;
   drawChart();
 
@@ -688,6 +748,7 @@ function update() {
       .map(([n, v, u]) => `<span>${n}</span><span>${fmt(v, 1)} ${u}</span>`).join('');
   } else if (S.aq) { $('aqi').textContent = '—'; Object.assign($('aqiCat'), { textContent: '' }).style.background = 'none'; $('aq').textContent = 'No air quality forecast for this hour.'; }
 
+  renderRide();
   if (lastPick) inspect(...lastPick, false);
 }
 
@@ -700,7 +761,7 @@ function floodedArea() { // km² of normally-dry land below current water level 
 }
 
 function drawChart() {
-  const c = $('tideChart'), T = S.tide; if (!T || !S.wl) return;
+  const c = $('tideChart'), T = S.tide; if (!T || !S.wl || !c.clientWidth) return; // 0 wide while its drawer section is closed
   const dpr = devicePixelRatio, W = c.clientWidth, H = c.clientHeight;
   c.width = W * dpr; c.height = H * dpr;
   const g = c.getContext('2d'); g.scale(dpr, dpr);
@@ -766,12 +827,18 @@ function inspect(u, v, fetchZone) {
   const rd = rainDepthAt(u, v);
   if (S.rain) rows.push(['Rain ponding', rd >= 0.01 ? `<b style="color:var(--good)">${fmt(rd / 0.0254, 1)} in</b>` : 'none']);
   const Tg = gridVal(t, 'temperature_2m', u, v), RH = gridVal(t, 'relative_humidity_2m', u, v);
+  let feels = '';
   if (Tg != null) {
     const U = uhiFor(t), px = U && Math.min(U.W - 1, Math.round(u * (U.W - 1))) + Math.min(U.H - 1, Math.round((1 - v) * (U.H - 1))) * U.W;
     const anom = U ? U.anom[px] : 0, hiV = heatIndex(Tg + anom, RH), [hc, col] = heatCat(hiV);
+    if ($('lHeat').checked) feels = ` Feels like ${fmt(hiV, 0)}°F here.`;
     rows.push(['Heat index', `${fmt(hiV, 0)} °F <span class="tag" style="background:${col}">${hc}</span>`],
       ['Local heat-island offset', anom ? `${anom > 0 ? '+' : ''}${fmt(anom, 1)} °F` : 'no city data']);
   }
+  // plain-language version for the HUD card; river, marsh and harbor (below MHHW, under water) aren't streets
+  const tideFt = S.tide && uniforms.uWater.value > -90 ? uniforms.uWater.value / FT - elevFt : 0;
+  const advice = tideFt > 0 && elevAt(u, v) < uniforms.uMhhw.value ? 'open water or marsh.' : spotAdvice(Math.max(tideFt * 12, rd / 0.0254));
+  Object.assign($('spot'), { hidden: false, textContent: `${S.i === BACK ? 'This spot now' : `This spot at ${when(t)}`}: ${advice}${feels}` });
   const render = () => { $('inspect').innerHTML = `<div class="kv">${rows.map(([a, b]) => `<span>${a}</span><span>${b}</span>`).join('')}</div>${Object.values(remote).join('')}`; };
   if (!fetchZone) return render();
   const seq = ++femaSeq, mine = remote = { fema: '<div class="sub">Looking up zone, neighborhood, pipes…</div>' };
@@ -805,24 +872,41 @@ function inspect(u, v, fetchZone) {
 
 // ---------- UI wiring ----------
 $('time').max = N - 1;
-$('time').addEventListener('input', e => { S.i = +e.target.value; update(); });
+function setHour(i) { S.i = i; $('time').value = i; update(false); }
+$('time').addEventListener('input', e => setHour(+e.target.value));
 // shareable time: ?t=unix seconds, written when the user settles on an hour (not on every step, browsers rate-limit URL updates)
 const saveTime = () => setParam('t', S.i === BACK ? null : tAt(S.i));
 $('time').addEventListener('change', saveTime);
-$('now').onclick = () => { S.i = BACK; $('time').value = BACK; update(); saveTime(); };
+$('now').onclick = () => { setHour(BACK); saveTime(); };
 let timer = null;
 $('play').onclick = () => {
   if (timer) { clearInterval(timer); timer = null; $('play').textContent = '▶ Play'; saveTime(); return; }
   $('play').textContent = '❚❚ Pause';
-  timer = setInterval(() => { S.i = (S.i + 1) % N; $('time').value = S.i; update(); }, 200);
+  timer = setInterval(() => setHour((S.i + 1) % N), 200);
 };
-$('basemap').onchange = e => setBasemap(e.target.value);
+$('lSat').onchange = setBasemap;
 $('lFlood').onchange = e => { uniforms.uFlood.value = e.target.checked; };
 $('lRain').onchange = e => { uniforms.uRainOn.value = e.target.checked; update(); };
 for (const id of ['drain', 'conc']) $(id).addEventListener('input', () => {
   $('drainV').textContent = `${(+$('drain').value).toFixed(2)} in/h`; $('concV').textContent = `${$('conc').value}×`; update();
 });
 $('recenter').onclick = fitFocus;
+// strip: tap or drag to pick an hour; arrows step an hour, Page keys 6 h, Home/End jump to the ends
+const strip = $('strip'), stripPick = e => {
+  const r = $('bars').getBoundingClientRect();
+  setHour(BACK + Math.min(STRIP - 1, Math.max(0, Math.floor((e.clientX - r.left) / r.width * STRIP))));
+};
+strip.addEventListener('pointerdown', e => { strip.setPointerCapture(e.pointerId); stripPick(e); });
+strip.addEventListener('pointermove', e => { if (strip.hasPointerCapture(e.pointerId)) stripPick(e); });
+strip.addEventListener('pointerup', saveTime);
+strip.addEventListener('keydown', e => {
+  const k = S.i - BACK, to = { ArrowLeft: k - 1, ArrowRight: k + 1, PageUp: k - 6, PageDown: k + 6, Home: 0, End: STRIP - 1 }[e.key];
+  if (to == null) return;
+  e.preventDefault(); setHour(BACK + Math.min(STRIP - 1, Math.max(0, to))); saveTime();
+});
+// drawer: its tide chart and flooded-area note skip work while hidden, so refresh them when the drawer or a section opens
+$('more').addEventListener('toggle', () => update(false), true);
+addEventListener('keydown', e => { if (e.key === 'Escape' && $('more').matches(':popover-open')) $('more').hidePopover(); });
 $('lHeat').onchange = update;
 $('lFema').onchange = e => { uniforms.uFemaOn.value = e.target.checked; };
 $('lRoads').onchange = e => { roads.visible = e.target.checked; };
@@ -831,16 +915,16 @@ $('lCanopy').onchange = e => { uniforms.uCanopyOn.value = e.target.checked; if (
 $('slrScen').onchange = updateSlr; $('slrYear').onchange = updateSlr;
 $('surge').addEventListener('input', e => { S.surgeFt = +e.target.value; $('surgeV').textContent = `+${S.surgeFt.toFixed(1)} ft`; update(); });
 $('exag').addEventListener('input', e => { exag = +e.target.value; $('exagV').textContent = `${exag}×`; if (heights) applyExag(); });
-addEventListener('resize', drawChart);
+addEventListener('resize', drawChart); addEventListener('resize', drawTicks);
 // shareable layers: ?layers=flood,rain,… (omitted while they match the page defaults)
-const LAYERS = ['lFlood', 'lRain', 'lHeat', 'lFema', 'lRoads', 'lStorm', 'lCanopy'], layerName = id => id.slice(1).toLowerCase();
+const LAYERS = ['lFlood', 'lRain', 'lHeat', 'lFema', 'lRoads', 'lStorm', 'lCanopy', 'lSat'], layerName = id => id.slice(1).toLowerCase();
 if (param('layers') != null) { const on = param('layers').split(','); for (const id of LAYERS) $(id).checked = on.includes(layerName(id)); }
 for (const id of LAYERS) $(id).addEventListener('change', () => setParam('layers', LAYERS.every(l => $(l).checked === $(l).defaultChecked) ? null
   : LAYERS.filter(l => $(l).checked).map(layerName).join(',') || 'none'));
 const tShared = (+param('t') - T0) / 3600;
 if (Number.isInteger(tShared) && tShared >= 0 && tShared < N) $('time').value = tShared; // a shared hour outside the window falls back to now
 // browsers restore form state on reload; push it into the scene
-for (const id of ['lFlood', 'lRain', 'lFema', 'lRoads', 'lStorm', 'lCanopy']) $(id).dispatchEvent(new Event('change'));
+for (const id of ['lFlood', 'lRain', 'lFema', 'lRoads', 'lStorm', 'lCanopy', 'lSat']) $(id).dispatchEvent(new Event('change'));
 for (const id of ['surge', 'exag', 'drain']) $(id).dispatchEvent(new Event('input'));
 S.i = +$('time').value;
 
@@ -848,14 +932,20 @@ S.i = +$('time').value;
 addressBox($('addr'), place => terrainP.then(() => {
   const [u, v] = lonlat2uv(place.lon, place.lat);
   if (!heights) return; // elevation failed: the loading note already says so
-  if (u < 0 || u > 1 || v < 0 || v > 1) { $('inspect').textContent = `${place.label} is outside this map.`; return; }
+  if (u < 0 || u > 1 || v < 0 || v > 1) {
+    $('inspect').textContent = `${place.label} is outside this map.`;
+    Object.assign($('spot'), { hidden: false, textContent: $('inspect').textContent });
+    return;
+  }
   const [x, z] = uv2xz(u, v), shift = new THREE.Vector3(x, 0, z).sub(controls.target);
   controls.target.add(shift); camera.position.add(shift);
   marker.position.set(x, disp(elevAt(u, v)), z); marker.visible = true;
   lastPick = [u, v]; inspect(u, v, true);
 }));
+$('addr').querySelector('input').placeholder = 'Where are you riding to?';
 
-const frame = ms => { uniforms.uTime.value = ms / 1000; controls.update(); renderer.render(scene, camera); };
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches; // no water ripple
+const frame = ms => { if (!still) uniforms.uTime.value = ms / 1000; controls.update(); renderer.render(scene, camera); };
 renderer.setAnimationLoop(frame);
 // Dashboard shell (index.html) says when this tab is hidden: stop rendering so the GPU idles.
 addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'tab') renderer.setAnimationLoop(e.data.active ? frame : null); });

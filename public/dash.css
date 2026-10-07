@@ -1,60 +1,134 @@
-/* Shared look for the 2D dashboards (construction, safety, services). Colors come from tokens.css. */
+/* Shared look for every tab: a full-bleed map with the controls floating over it as a HUD. Search sits top-left, the
+   answer card under it, a dock along the bottom, and a "More" drawer holds everything else. Colors come from tokens.css. */
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
-  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-body { display: grid; grid-template-columns: 380px 1fr; overflow: hidden; }
-aside.side { overflow-y: auto; padding: 14px 16px 24px; background: var(--panel); border-right: 1px solid var(--line); }
-#map { height: 100%; background: var(--bg); }
-h1 { font-size: 16px; margin: 0 0 2px; }
-h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 16px 0 6px; font-weight: 600; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.45 var(--font); overflow: hidden; }
+#map, #view { position: fixed; inset: 0; }
+button, input, select { font: inherit; color: inherit; }
+button { background: var(--button-bg); border: 1px solid var(--control-line); border-radius: 8px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+button:hover { border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+a { color: var(--accent); }
+.glass { background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .sub { color: var(--muted); font-size: 12px; }
-.bad { color: var(--bad); } .ok { color: var(--good); }
-label { display: flex; align-items: center; gap: 8px; margin: 3px 0; cursor: pointer; }
-input[type=text], input[type=search], select { width: 100%; background: var(--control-bg); color: var(--text); border: 1px solid var(--control-line);
-  border-radius: 6px; padding: 6px 8px; font: inherit; }
-button { background: var(--button-bg); color: var(--text); border: 1px solid var(--control-line); border-radius: 6px; padding: 5px 10px; cursor: pointer; font: inherit; }
-button:hover, input:focus, select:focus { border-color: var(--accent); }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.row { display: flex; gap: 6px; align-items: center; }
-.row > * { flex: 1; } .row > button { flex: 0 0 auto; }
-.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.tile { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-.tile b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
-.tile span { color: var(--muted); font-size: 11px; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; margin: 6px 0; }
-.card h3 { margin: 0 0 3px; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
-.card .big { font-size: 16px; font-weight: 600; }
+.ok { color: var(--good); } .bad { color: var(--bad); }
+
+/* HUD: a grid laid over the map. Only its panels take pointer events, so the map stays draggable around them. */
+.hud { position: fixed; inset: 0; display: grid; gap: 8px; padding: 12px; pointer-events: none; z-index: 1000;
+  grid-template-columns: minmax(0, 360px) 1fr auto; grid-template-rows: auto auto 1fr auto;
+  grid-template-areas: "search . corner" "card . ." ". . ." "dock dock dock"; }
+.hud > * { pointer-events: auto; }
+
+#addr { grid-area: search; border-radius: 12px; padding: 6px; }
+#addr .row { display: flex; gap: 6px; }
+#addr input { flex: 1; min-width: 0; background: var(--control-bg); border: 1px solid var(--control-line); border-radius: 8px; padding: 7px 10px; }
+#addr input:focus { border-color: var(--accent); }
+#addr [data-msg] { color: var(--muted); font-size: 12px; padding: 4px 4px 0; }
+#addr [data-msg]:empty { display: none; }
+
+.corner { grid-area: corner; display: flex; gap: 6px; align-self: start; }
+.corner button { background: var(--glass); border-color: var(--line); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-weight: 600; }
+.corner svg { display: block; width: 18px; height: 18px; }
+
+/* Answer card: one headline that says what matters, a sentence or two, then a short key */
+#card { grid-area: card; align-self: start; border-radius: 14px; padding: 14px 16px; max-height: 100%; overflow-y: auto; }
+#card p { margin: 6px 0 0; }
+#headline { font-size: 22px; line-height: 1.15; font-weight: 800; letter-spacing: -0.01em; margin: 0; font-variant-numeric: tabular-nums; }
+/* warning-sign diamond, only when there's something to warn about; pages set --level1 / --level2 */
+#card[data-level="1"] #headline::before, #card[data-level="2"] #headline::before { content: ''; display: inline-block; width: .55em; height: .55em;
+  margin: 0 .5em .12em .1em; rotate: 45deg; border-radius: 2px; background: var(--level1, var(--warn)); }
+#card[data-level="2"] #headline::before { background: var(--level2, var(--bad)); }
+.picks { list-style: none; margin: 10px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.picks button { display: block; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 6px 0; white-space: normal; }
+.picks button:hover { background: var(--hover); }
+.picks .meta { color: var(--muted); }
+.key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.key span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { display: inline-block; width: 18px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+.sw.line { height: 3px; }
+.sw.dot { width: 10px; height: 10px; border-radius: 50%; }
+
+/* Dock: the tab's time strip plus a few toggles */
+.dock { grid-area: dock; justify-self: center; width: min(100%, 820px); border-radius: 14px; padding: 10px 12px 6px; display: grid; gap: 8px; }
+.dock-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.strip-ticks { position: relative; height: 16px; margin-top: 3px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.strip-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.strip-ticks span:first-child { transform: none; }
+.toggles, .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+/* toggles (checkboxes) and segmented choices (radios) look like sign plates: filled when on */
+.toggle, .seg label { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--control-line);
+  border-radius: 8px; color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; }
+.seg { gap: 0; }
+.seg label { border-radius: 0; margin-left: -1px; }
+.seg label:first-child { border-radius: 8px 0 0 8px; margin-left: 0; }
+.seg label:last-child { border-radius: 0 8px 8px 0; }
+.toggle input, .seg input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.toggle:hover, .seg label:hover { border-color: var(--accent); z-index: 1; }
+.toggle:has(:checked), .seg label:has(:checked) { background: var(--text); border-color: var(--text); color: var(--bg); z-index: 1; }
+.toggle:has(:focus-visible), .seg label:has(:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; z-index: 2; }
+#attrib, #attrib .leaflet-control-attribution { font-size: 11px; color: var(--muted); background: none !important; padding: 0; margin: 0; float: none; text-align: right; }
+#attrib a { color: var(--muted); }
+
+/* Drawer: everything a casual user doesn't need, one click away */
+#more { inset: 12px 12px auto auto; margin: 0; width: min(380px, calc(100% - 24px)); height: auto; max-height: calc(100% - 24px); overflow-y: auto;
+  padding: 12px 16px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text); }
+.more-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.more-head h2 { font-size: 17px; margin: 0; }
+#more details { border-top: 1px solid var(--line); padding: 6px 0 10px; }
+#more summary { font-weight: 700; cursor: pointer; padding: 4px 0; }
+#more h3 { font-size: 14px; margin: 12px 0 2px; }
+#more label { display: flex; align-items: center; gap: 8px; margin: 4px 0; cursor: pointer; }
+#more input[type=range] { width: 100%; accent-color: var(--accent); }
+#more select { width: 100%; background: var(--control-bg); border: 1px solid var(--control-line); border-radius: 6px; padding: 4px 6px; }
+.row { display: flex; gap: 8px; align-items: center; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+.kv span:nth-child(odd) { color: var(--muted); }
+.kv span:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; padding: 1px 7px; border-radius: 99px; font-size: 11px; font-weight: 600; color: #0b0f14; }
+.ramp { height: 8px; border-radius: 4px; margin: 4px 0 2px; }
+.ramp-l { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+.ticks { position: relative; height: 14px; color: var(--muted); font-size: 11px; }
+.ticks span { position: absolute; transform: translateX(-50%); }
+.ticks span:first-child { transform: none; } .ticks span:last-child { transform: translateX(-100%); }
+.note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+.list { list-style: none; padding: 0; margin: 0; }
+.list li { padding: 7px 0; border-bottom: 1px solid var(--line); }
+.list li:has(> .pick) { padding: 0; }
+.list .pick { display: block; width: 100%; padding: 7px 0; background: none; border: 0; border-radius: 0; text-align: left; white-space: normal; }
+.list .pick:hover { background: var(--hover); }
+.list .meta { color: var(--muted); font-size: 12px; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.swatches { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 12px; color: var(--muted); margin: 4px 0; }
+.swatches span { display: flex; align-items: center; gap: 4px; }
+.swatches i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
 .bars { display: grid; grid-template-columns: minmax(0, 1fr) 2fr auto; gap: 3px 8px; align-items: center; font-size: 12px; }
 .bars .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .bars .bar { height: 10px; border-radius: 3px; background: var(--accent); }
 .bars .val { text-align: right; font-variant-numeric: tabular-nums; }
-.list { list-style: none; padding: 0; margin: 0; }
-.list li { padding: 7px 0; border-bottom: 1px solid var(--line); }
-.list li:has(> .pick) { padding: 0; }
-.list .pick { display: block; width: 100%; padding: 7px 0; background: none; border: 0; border-radius: 0; color: inherit; text-align: left; }
-.list .pick:hover { background: var(--hover); }
-.list .meta { color: var(--muted); font-size: 11px; }
-.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
-.swatches { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 11px; color: var(--muted); margin: 4px 0; }
-.swatches span { display: flex; align-items: center; gap: 4px; }
-.swatches i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
-svg.chart { width: 100%; height: 130px; display: block; }
-svg.chart text { fill: var(--muted); font-size: 9px; }
-.note { color: var(--muted); font-size: 11px; margin-top: 8px; }
-/* Leaflet in the dark theme */
+
+/* Leaflet, themed */
 .leaflet-container { background: var(--bg); font: inherit; }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--card); color: var(--text); border: 1px solid var(--line); }
 .leaflet-popup-content { margin: 10px 12px; font-size: 12px; }
-.leaflet-bar a { background: var(--card); color: var(--text); border-color: var(--control-line); }
-.leaflet-control-attribution { background: color-mix(in srgb, var(--bg) 80%, transparent) !important; color: var(--muted); }
-.map-hint { background: var(--glass); color: var(--muted); padding: 2px 8px; border-radius: 99px; font-size: 11px; }
-.leaflet-control-attribution a { color: var(--accent); }
+.leaflet-tooltip { font: 12px/1.4 var(--font); }
+
 @media (max-width: 760px) {
-  /* map first, so it's on screen without scrolling past every list; sidebar follows */
-  body { display: flex; flex-direction: column; overflow: auto; height: auto; }
-  #map { order: -1; height: 50vh; flex: 0 0 auto; border-bottom: 1px solid var(--line); }
-  aside.side { border-right: 0; }
-  /* 44px touch targets */
-  button, select, input[type=text], input[type=search], label, .list .pick { min-height: 44px; }
-  .list .pick { padding: 10px 0; }
+  /* phone: search across the top, card + dock join into one bottom sheet */
+  .hud { padding: 8px; gap: 0 6px; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto 1fr auto auto;
+    grid-template-areas: "search search" ". corner" ". ." "card card" "dock dock"; }
+  .corner { margin-top: 6px; }
+  #card { border-radius: 14px 14px 0 0; border-bottom: 0; padding: 12px 14px 4px; max-height: 32vh; }
+  #headline { font-size: 17px; }
+  .key { display: none; } /* toggle swatches carry the colors on phones */
+  .dock { width: 100%; border-radius: 0 0 14px 14px; border-top: 0; padding-top: 6px; }
+  .toggle, .seg label { padding: 6px 10px; gap: 6px; }
+  /* one row of controls that scrolls sideways, so the sheet doesn't bury the map */
+  .dock-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -12px; padding: 3px 12px; }
+  .dock-row > * { flex: 0 0 auto; }
+  .toggles, .seg { flex-wrap: nowrap; }
+  #more { inset: auto 0 0 0; width: 100%; max-height: 85%; border-radius: 14px 14px 0 0; }
+}
+@media (max-width: 760px), (pointer: coarse) {
+  button, select, .toggle, .seg label, #addr input, #more label, #more input[type=range], .picks button { min-height: 44px; }
 }

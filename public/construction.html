@@ -6,80 +6,143 @@
 <title>Construction Near Me · Holy City Live</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="tokens.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap">
 <link rel="stylesheet" href="dash.css">
+<style>
+  /* Road-work orange is the loud color here: closures. New buildings are bright dots, every other permit stays muted. */
+  :root { --new: #e6edf3; --work: #6b7c91; --level1: var(--closure); --level2: var(--flood-closure); }
+  @media (prefers-color-scheme: light) { :root { --new: #1f2328; --work: #98a2ae; } }
+  .sw.closure { background: var(--closure); } .sw.flooded { background: var(--flood-closure); }
+  .sw.scheduled { background: repeating-linear-gradient(90deg, var(--scheduled-closure) 0 4px, transparent 4px 7px); }
+  .sw.new { background: var(--new); box-shadow: 0 0 0 1px currentColor; } /* stays visible on a lit toggle */ .sw.work { background: var(--work); }
+  #biggestLbl { margin-top: 12px !important; }
+  /* 12 months of permits near you, stacked: new buildings on top of other work */
+  #months { display: flex; align-items: flex-end; gap: 3px; height: 48px; }
+  #months .col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
+  #months i { display: block; }
+  #months i.new { background: var(--new); border-radius: 2px 2px 0 0; }
+  #months i.work { background: var(--work); }
+  #months i.work:first-child { border-radius: 2px 2px 0 0; }
+  #months .col.partial { opacity: .5; }
+  #mticks span { transform: translateX(-50%); } #mticks span:last-child { transform: translateX(-100%); }
+</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 <body>
-<aside class="side">
-  <h1>Construction Near Me</h1>
-  <div class="sub">City of Charleston permits, road closures and open code cases around an address. Click the map to move.</div>
-  <h2>Where</h2>
-  <div id="addr"></div>
-  <div class="row" style="margin-top:6px"><label for="radius" class="sub" style="flex:0 0 auto">Within</label>
-    <select id="radius"><option value="402">¼ mile</option><option value="805" selected>½ mile</option><option value="1609">1 mile</option></select></div>
-
-  <h2>Permit types</h2>
-  <div id="cats"></div>
-
-  <div class="swatches"><span><i style="background:var(--closure)"></i>closure</span><span><i style="background:var(--flood-closure)"></i>flood closure</span>
-    <span><i style="background:var(--scheduled-closure)"></i>scheduled closure</span><span><i style="border:1.5px solid var(--code-case)"></i>open code case</span>
-    <span class="sub">dot size = declared value</span></div>
-
-  <h2>Summary</h2>
-  <div class="tiles">
-    <div class="tile"><b id="nPermits">—</b><span>permits shown</span></div>
-    <div class="tile"><b id="value">—</b><span>declared value</span></div>
-    <div class="tile"><b id="nNew">—</b><span>new buildings</span></div>
-    <div class="tile"><b id="nClosures">—</b><span>road closures</span></div>
-  </div>
-  <div id="byCat" style="margin-top:8px"></div>
-
-  <h2>Road closures</h2>
-  <ul class="list" id="closures"></ul>
-  <h2>Permits, newest first</h2>
-  <ul class="list" id="permits"></ul>
-  <h2>Open code enforcement cases</h2>
-  <ul class="list" id="cases"></ul>
-  <div class="note">Sources: City of Charleston EnerGov permits &amp; code cases (nightly), City road closures (live).
-    Some permits carry future issue dates (e.g. scheduled events); they're kept and marked.</div>
-  <div class="note" id="status"></div>
-</aside>
 <div id="map"></div>
+
+<div class="hud">
+  <div id="addr" class="glass"></div>
+  <div class="corner"><button type="button" popovertarget="more">More</button></div>
+
+  <section id="card" class="glass" aria-label="Construction near you">
+    <h1 id="headline">Looking for road work…</h1>
+    <p id="detail"></p>
+    <ul class="picks" id="closurePicks"></ul>
+    <p class="sub" id="biggestLbl" hidden>Biggest projects nearby</p>
+    <ul class="picks" id="biggest"></ul>
+    <div class="key">
+      <span><i class="sw line flooded"></i>Closed for flooding</span>
+      <span><i class="sw line scheduled"></i>Closure scheduled</span>
+      <span>Bigger dot, bigger project</span>
+    </div>
+  </section>
+
+  <div class="dock glass">
+    <div id="strip" role="img" aria-label="Permits near you by month, loading">
+      <div id="months"></div>
+      <div class="strip-ticks" id="mticks" aria-hidden="true"></div>
+    </div>
+    <div class="dock-row">
+      <div class="seg" role="radiogroup" aria-label="Distance">
+        <label><input type="radio" name="radius" value="402">¼ mile</label>
+        <label><input type="radio" name="radius" value="805" checked>½ mile</label>
+        <label><input type="radio" name="radius" value="1609">1 mile</label>
+      </div>
+      <div class="toggles" role="group" aria-label="Show on the map">
+        <label class="toggle"><input type="checkbox" id="lClosures" checked><i class="sw line closure"></i>Closed streets</label>
+        <label class="toggle"><input type="checkbox" data-cats="0" checked><i class="sw dot new"></i>New buildings</label>
+        <label class="toggle"><input type="checkbox" data-cats="1,2,3" checked><i class="sw dot work"></i>Other work</label>
+      </div>
+    </div>
+    <div id="attrib"></div>
+  </div>
+</div>
+
+<aside id="more" popover="manual" aria-label="Construction details">
+  <div class="more-head"><h2>Construction details</h2><button type="button" popovertarget="more" popovertargetaction="hide">Close</button></div>
+  <details open>
+    <summary>Summary</summary>
+    <div class="kv">
+      <span>Permits shown</span><span id="nPermits">—</span>
+      <span>Declared value</span><span id="value">—</span>
+      <span>New buildings</span><span id="nNew">—</span>
+      <span>Road closures</span><span id="nClosures">—</span>
+    </div>
+    <div id="byCat" style="margin-top:8px"></div>
+  </details>
+  <details>
+    <summary>More to show</summary>
+    <label><input type="checkbox" id="lCases"> Open code enforcement cases</label>
+    <label><input type="checkbox" data-cats="4"> Rental, sign, event and occupancy permits</label>
+    <label><input type="checkbox" id="lOld"> Permits older than a year</label>
+    <div class="swatches"><span><i style="border:1.5px solid var(--code-case)"></i>open code case</span></div>
+  </details>
+  <details><summary>All road closures</summary><ul class="list" id="closures"></ul></details>
+  <details><summary>Permits, newest first</summary><ul class="list" id="permits"></ul></details>
+  <details><summary>Open code cases</summary><ul class="list" id="cases"></ul></details>
+  <details>
+    <summary>About this data</summary>
+    <div class="note">City of Charleston EnerGov permits and code cases (updated nightly) and City road closures (live).
+      Some permits carry future issue dates, such as scheduled events; they're kept and marked. Tap the map to look somewhere else.</div>
+    <div class="note" id="status"></div>
+  </details>
+</aside>
+
 <script type="module">
 import { CITY, $, esc, money, day, near, query, makeMap, addressBox, bars, failed, cssVar, param, setParam } from './dash.js';
+import { titleCase } from './say.js';
 
 const PERMITS = `${CITY}/Applications/MapServer/20`, CASES = `${CITY}/Applications/MapServer/59`, CLOSURES = `${CITY}/RoadClosuresViewer/MapServer`;
-// Category from the permit's type + work class. First match wins.
+const RADII = { 402: '¼ mile', 805: '½ mile', 1609: '1 mile' }, YEAR = 365 * 864e5;
+// Category from the permit's type + work class. First match wins. [name, short name, test]
 const CATS = [
-  ['New construction', '#4cc3ff', p => /^New/i.test(p.WORK_CLASS ?? '') && /Dwelling|Building|Multi-Family|Commercial|Accessory|Townhouse/i.test(p.PERMIT_TYPE ?? '')],
-  ['Renovation & additions', '#6fcf97', p => /Alteration|Addition|Repair|Remodel/i.test(p.WORK_CLASS ?? '')],
-  ['Trades (roof, electric, HVAC, plumbing)', '#f2c94c', p => /Roofing|Electrical|Mechanical|Plumbing|Gas|Fire Protection|Solar/i.test(p.PERMIT_TYPE ?? '')],
-  ['Site, engineering & demolition', '#f2994a', p => /Engineering|Demolition|Grading|Right of Way|Encroach|Tree|Land Disturb/i.test(p.PERMIT_TYPE ?? '')],
-  ['Other (rentals, signs, events, occupancy)', '#8b98a8', () => true],
+  ['New construction', 'new building', p => /^New/i.test(p.WORK_CLASS ?? '') && /Dwelling|Building|Multi-Family|Commercial|Accessory|Townhouse/i.test(p.PERMIT_TYPE ?? '')],
+  ['Renovation & additions', 'renovation', p => /Alteration|Addition|Repair|Remodel/i.test(p.WORK_CLASS ?? '')],
+  ['Trades (roof, electric, HVAC, plumbing)', 'trade work', p => /Roofing|Electrical|Mechanical|Plumbing|Gas|Fire Protection|Solar/i.test(p.PERMIT_TYPE ?? '')],
+  ['Site, engineering & demolition', 'site work', p => /Engineering|Demolition|Grading|Right of Way|Encroach|Tree|Land Disturb/i.test(p.PERMIT_TYPE ?? '')],
+  ['Other (rentals, signs, events, occupancy)', 'other permit', () => true],
 ];
 const catOf = p => CATS.findIndex(([, , test]) => test(p));
-$('cats').innerHTML = CATS.map(([name, color], i) =>
-  `<label><input type="checkbox" data-cat="${i}" ${i < 4 ? 'checked' : ''}><span class="dot" style="background:${color}"></span>${name}</label>`).join('');
+const dateOf = p => p.ISSUE_DATE ?? p.APPLICATION_DATE ?? 0;
+const short = ms => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+const cash = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format; // $14.2M
+const radius = () => +document.querySelector('[name=radius]:checked').value;
 
 const map = makeMap('map');
 const layer = L.layerGroup().addTo(map);
-let here = null, data = null, seq = 0;
-map.on('click', e => box.pick({ label: `Map point ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`, lat: e.latlng.lat, lon: e.latlng.lng }));
-if ([...$('radius').options].some(o => o.value === param('r'))) $('radius').value = param('r');
+let here = null, data = null, seq = 0, markers = [], closureLayers = [];
+map.on('click', e => box.pick({ label: 'Picked on the map', lat: e.latlng.lat, lon: e.latlng.lng }));
+const shared = document.querySelector(`[name=radius][value="${param('r')}"]`); if (shared) shared.checked = true;
 const box = addressBox($('addr'), place => { here = place; load(); });
-$('radius').onchange = () => { setParam('r', $('radius').value); if (here) load(); };
-$('cats').onchange = () => data && render();
+document.querySelector('.seg').onchange = () => { setParam('r', radius()); if (here) load(); };
+document.addEventListener('change', e => { if (data && e.target.matches('[data-cats], #lClosures, #lCases, #lOld')) render(); });
 
 async function load() {
-  const mySeq = ++seq, r = +$('radius').value, at = near(here.lat, here.lon, r);
-  $('status').textContent = 'Loading…';
+  const mySeq = ++seq, r = radius(), at = near(here.lat, here.lon, r);
+  $('headline').textContent = 'Looking for road work…'; $('detail').textContent = '';
   const geo = { ...at, outSR: 4326, f: 'geojson' };
   const [permits, cases, ...closures] = await Promise.all([
     query(PERMITS, { ...geo, where: '1=1', outFields: 'PERMIT_NUMBER,PERMIT_TYPE,WORK_CLASS,PERMIT_STATUS,ISSUE_DATE,APPLICATION_DATE,VALUATION,SQUARE_FEET,DESCRIPTION,PERMIT_ADDRESS_LINE1', resultRecordCount: 5000 }),
     query(CASES, { ...geo, where: "CASE_STATUS IN ('Opened','Unresolved','Hold')", outFields: 'CASE_NUMBER,CASE_TYPE,CASE_STATUS,OPENED_DATE,DESCRIPTION,MAIN_ADDRESS_LINE1' }),
     ...[1, 5, 11].map(l => query(`${CLOSURES}/${l}`, { ...geo, where: l === 11 ? '1=1' : "IS_DRILL IS NULL OR IS_DRILL <> 'Yes'", outFields: 'OBJECTID,STREET,LOCATION,REASON,TYPE,STATUS,START,END_' })
       .then(d => (d.features.forEach(f => { f.properties.future = l === 11; }), d))),
-  ]).catch(e => { failed($('status'), 'City permit data', e, load); return []; }); // shown in panel; keep last results
+  ]).catch(e => { // shown in the card; the map keeps the last results
+    if (mySeq === seq) { $('headline').textContent = 'Construction data is unavailable'; failed($('detail'), 'City permit data', e, load); }
+    return [];
+  });
   if (mySeq !== seq || !permits) return; // failed, or a newer search started
   const seen = new Set(); // the EM closure layer repeats features from the main layer
   data = { r, permits: permits.features, cases: cases.features,
@@ -90,39 +153,84 @@ async function load() {
 }
 
 function render() {
-  const on = new Set([...$('cats').querySelectorAll('input:checked')].map(i => +i.dataset.cat));
-  const now = Date.now();
-  const permits = data.permits.map(f => ({ f, p: f.properties, c: catOf(f.properties) })).filter(x => on.has(x.c))
-    .sort((a, b) => (b.p.ISSUE_DATE ?? b.p.APPLICATION_DATE ?? 0) - (a.p.ISSUE_DATE ?? a.p.APPLICATION_DATE ?? 0));
+  const on = new Set([...document.querySelectorAll('[data-cats]:checked')].flatMap(i => i.dataset.cats.split(',').map(Number)));
+  const now = Date.now(), recent = !$('lOld').checked;
+  const colors = { new: cssVar('--new'), work: cssVar('--work') }, colorOf = c => c === 0 ? colors.new : colors.work;
+  const all = data.permits.map(f => ({ f, p: f.properties, c: catOf(f.properties) })).filter(x => on.has(x.c));
+  const permits = all.filter(x => !recent || dateOf(x.p) >= now - YEAR).sort((a, b) => dateOf(b.p) - dateOf(a.p));
+  const live = data.closures.filter(f => !f.properties.future), soon = data.closures.filter(f => f.properties.future);
+
   layer.clearLayers();
   const accent = cssVar('--accent');
-  L.circle([here.lat, here.lon], { radius: data.r, color: accent, weight: 1, fillOpacity: 0.04 }).addTo(layer);
+  L.circle([here.lat, here.lon], { radius: data.r, color: accent, weight: 1, fillOpacity: 0.04, interactive: false }).addTo(layer);
   L.circleMarker([here.lat, here.lon], { radius: 6, color: '#fff', weight: 2, fillColor: accent, fillOpacity: 1 }).addTo(layer).bindTooltip(esc(here.label));
-  const markers = permits.map(({ f, p, c }) => L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]],
-    { radius: p.VALUATION > 1e6 ? 6 : p.VALUATION > 1e5 ? 4.5 : 3, color: '#0b0f14', weight: 0.5, fillColor: CATS[c][1], fillOpacity: 0.85 })
-    .bindPopup(`<b>${esc(p.PERMIT_ADDRESS_LINE1)}</b><br>${esc(p.PERMIT_TYPE)} · ${esc(p.WORK_CLASS)}<br>${esc(p.PERMIT_STATUS)} · issued ${day(p.ISSUE_DATE)}<br>Value ${money(p.VALUATION)}${p.SQUARE_FEET ? ` · ${p.SQUARE_FEET.toLocaleString()} sq ft` : ''}<br><span class="sub">${esc((p.DESCRIPTION ?? '').slice(0, 220))}</span><br><span class="sub">#${esc(p.PERMIT_NUMBER)}</span>`).addTo(layer));
-  for (const f of data.closures) {
+  markers = permits.map(({ f, p, c }) => L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]],
+    { radius: p.VALUATION > 1e6 ? 7 : p.VALUATION > 1e5 ? 4.5 : 3, color: cssVar('--bg'), weight: 0.5, fillColor: colorOf(c), fillOpacity: 0.9 })
+    .bindPopup(`<b>${esc(p.PERMIT_ADDRESS_LINE1)}</b><br>${esc(p.PERMIT_TYPE)}, ${esc(p.WORK_CLASS)}<br>${esc(p.PERMIT_STATUS)}, issued ${day(p.ISSUE_DATE)}<br>Value ${money(p.VALUATION)}${p.SQUARE_FEET ? `, ${p.SQUARE_FEET.toLocaleString()} sq ft` : ''}<br><span class="sub">${esc((p.DESCRIPTION ?? '').slice(0, 220))}</span><br><span class="sub">#${esc(p.PERMIT_NUMBER)}</span>`).addTo(layer));
+  const closureList = [...live, ...soon];
+  closureLayers = closureList.map(f => {
     const p = f.properties, flood = /FLOOD/i.test(p.REASON ?? '');
-    L.geoJSON(f, { style: { color: cssVar(flood ? '--flood-closure' : p.future ? '--scheduled-closure' : '--closure'), weight: 3, opacity: 0.9, dashArray: p.future ? '5 5' : null } })
-      .bindPopup(`<b>${esc(p.STREET)}</b><br>${esc(p.LOCATION ?? '')}<br>${esc(p.TYPE ?? '')} · ${esc(p.REASON ?? '')}<br>${day(p.START)} → ${day(p.END_)}${p.future ? ' (scheduled)' : ''}`).addTo(layer);
-  }
-  for (const f of data.cases) L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]], { radius: 4, color: cssVar('--code-case'), weight: 1.5, fillOpacity: 0 })
+    const l = L.geoJSON(f, { style: p.future ? { color: cssVar('--scheduled-closure'), weight: 2, opacity: 0.55, dashArray: '4 6' } // scheduled: there, but quieter than what's closed now
+      : { color: cssVar(flood ? '--flood-closure' : '--closure'), weight: 5, opacity: 0.95 } })
+      .bindPopup(`<b>${esc(p.STREET)}</b><br>${esc(p.LOCATION ?? '')}<br>${esc(p.TYPE ?? '')}${p.REASON ? `, ${esc(p.REASON)}` : ''}<br>${day(p.START)} to ${day(p.END_)}${p.future ? ' (scheduled)' : ''}`);
+    if ($('lClosures').checked) l.addTo(layer);
+    return l;
+  });
+  if ($('lCases').checked) for (const f of data.cases) L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]], { radius: 4, color: cssVar('--code-case'), weight: 1.5, fillOpacity: 0 })
     .bindPopup(`<b>${esc(f.properties.MAIN_ADDRESS_LINE1)}</b><br>${esc(f.properties.CASE_TYPE)}<br>${esc(f.properties.CASE_STATUS)} since ${day(f.properties.OPENED_DATE)}`).addTo(layer);
 
+  // the answer: closures first (they change your route), then what's being built
+  const floods = live.filter(f => /FLOOD/i.test(f.properties.REASON ?? '')).length, nNew = permits.filter(x => x.c === 0).length, within = RADII[data.r];
+  $('card').dataset.level = floods ? 2 : live.length ? 1 : 0;
+  $('headline').textContent = live.length ? `${live.length} ${live.length === 1 ? 'street' : 'streets'} closed within ${within}` : `No street closures within ${within}`;
+  $('detail').textContent = [
+    `${permits.length.toLocaleString()} ${permits.length === 1 ? 'permit' : 'permits'} ${recent ? 'in the last year' : 'on record'}${nNew ? `, including ${nNew} new ${nNew === 1 ? 'building' : 'buildings'}` : ''}.`,
+    soon.length ? `${soon.length} more ${soon.length === 1 ? 'closure is' : 'closures are'} scheduled.` : '',
+  ].join(' ').trim();
+  $('closurePicks').innerHTML = closureList.slice(0, 3).map((f, i) => { const p = f.properties; return `<li><button type="button" data-c="${i}"><b>${esc(titleCase(p.STREET))}</b>
+    <span class="meta">${esc((p.REASON || p.TYPE || 'closed').toLowerCase())}${p.future ? `, starts ${p.START ? short(p.START) : 'soon'}` : p.END_ ? ` until ${short(p.END_)}` : ''}</span></button></li>`; }).join('');
+  const biggest = permits.map((x, i) => ({ ...x, i })).filter(x => x.p.VALUATION > 0).sort((a, b) => b.p.VALUATION - a.p.VALUATION).slice(0, 3);
+  $('biggestLbl').hidden = !biggest.length;
+  $('biggest').innerHTML = biggest.map(({ p, c, i }) => `<li><button type="button" data-p="${i}"><b>${esc(titleCase(p.PERMIT_ADDRESS_LINE1))}</b>
+    <span class="meta">${cash(p.VALUATION)} ${CATS[c][1]}, ${dateOf(p) > now ? 'scheduled' : 'filed'} ${short(dateOf(p))}</span></button></li>`).join('');
+  drawMonths(all);
+
+  // drawer
   $('nPermits').textContent = permits.length.toLocaleString();
   $('value').textContent = money(permits.reduce((s, x) => s + (x.p.VALUATION ?? 0), 0));
-  $('nNew').textContent = permits.filter(x => x.c === 0).length.toLocaleString();
-  $('nClosures').textContent = data.closures.length;
-  bars($('byCat'), CATS.map(([n, color], i) => [n, permits.filter(x => x.c === i).length, color]).filter((_, i) => on.has(i)));
-  $('closures').innerHTML = data.closures.map(f => { const p = f.properties; return `<li><b>${esc(p.STREET)}</b> <span class="meta">${esc(p.REASON ?? '')}${p.future ? ' · scheduled' : ''}</span>
-    <div class="meta">${esc(p.LOCATION ?? '')} · ${day(p.START)} → ${day(p.END_)}</div></li>`; }).join('') || '<li class="sub">None in range.</li>';
-  $('permits').innerHTML = permits.slice(0, 150).map(({ p, c }, i) => `<li><button type="button" class="pick" data-i="${i}"><span class="dot" style="background:${CATS[c][1]}"></span><b>${esc(p.PERMIT_ADDRESS_LINE1)}</b> · ${money(p.VALUATION)}
-    <div class="meta">${esc(p.PERMIT_TYPE)} · ${esc(p.WORK_CLASS)} · ${esc(p.PERMIT_STATUS)} · ${day(p.ISSUE_DATE ?? p.APPLICATION_DATE)}${(p.ISSUE_DATE ?? 0) > now ? ' (future-dated)' : ''}</div></button></li>`).join('')
-    + (permits.length > 150 ? `<li class="sub">+ ${permits.length - 150} more on the map</li>` : '') || '<li class="sub">None in range.</li>';
-  $('permits').onclick = e => { const li = e.target.closest('[data-i]'); if (li) { const m = markers[+li.dataset.i]; map.setView(m.getLatLng(), 18); m.openPopup(); } };
-  $('cases').innerHTML = data.cases.slice(0, 60).map(f => `<li><b>${esc(f.properties.MAIN_ADDRESS_LINE1)}</b><div class="meta">${esc(f.properties.CASE_TYPE)} · ${esc(f.properties.CASE_STATUS)} since ${day(f.properties.OPENED_DATE)}</div></li>`).join('') || '<li class="sub">None open in range.</li>';
+  $('nNew').textContent = nNew.toLocaleString();
+  $('nClosures').textContent = `${live.length} now, ${soon.length} scheduled`;
+  bars($('byCat'), CATS.map(([n], i) => [n, permits.filter(x => x.c === i).length, colorOf(i)]).filter((_, i) => on.has(i)));
+  $('closures').innerHTML = closureList.map(f => { const p = f.properties; return `<li><b>${esc(p.STREET)}</b> <span class="meta">${esc(p.REASON ?? '')}${p.future ? ', scheduled' : ''}</span>
+    <div class="meta">${esc(p.LOCATION ?? '')}, ${day(p.START)} to ${day(p.END_)}</div></li>`; }).join('') || '<li class="sub">None in range.</li>';
+  $('permits').innerHTML = permits.slice(0, 150).map(({ p, c }, i) => `<li><button type="button" class="pick" data-p="${i}"><span class="dot" style="background:${colorOf(c)}"></span><b>${esc(p.PERMIT_ADDRESS_LINE1)}</b>, ${money(p.VALUATION)}
+    <div class="meta">${esc(p.PERMIT_TYPE)}, ${esc(p.WORK_CLASS)}, ${esc(p.PERMIT_STATUS)}, ${day(dateOf(p))}${(p.ISSUE_DATE ?? 0) > now ? ' (future-dated)' : ''}</div></button></li>`).join('')
+    + (permits.length > 150 ? `<li class="sub">${permits.length - 150} more on the map</li>` : '') || '<li class="sub">None in range.</li>';
+  $('cases').innerHTML = data.cases.slice(0, 60).map(f => `<li><b>${esc(f.properties.MAIN_ADDRESS_LINE1)}</b><div class="meta">${esc(f.properties.CASE_TYPE)}, ${esc(f.properties.CASE_STATUS)} since ${day(f.properties.OPENED_DATE)}</div></li>`).join('') || '<li class="sub">None open in range.</li>';
 }
-if (!here) box.pick({ label: '80 Broad St, 29401 (City Hall) — search to change', lat: 32.77672, lon: -79.93081 }, false);
+
+// 12 calendar months of permits near you (category toggles apply), new buildings stacked on other work
+function drawMonths(all) {
+  const months = Array.from({ length: 12 }, (_, k) => { const m = new Date(); m.setDate(1); m.setHours(0, 0, 0, 0); m.setMonth(m.getMonth() - 11 + k); return { m, n: 0, nNew: 0 }; });
+  for (const { p, c } of all) {
+    const d = new Date(dateOf(p)), k = (d.getFullYear() - months[0].m.getFullYear()) * 12 + d.getMonth() - months[0].m.getMonth();
+    if (k >= 0 && k < 12 && dateOf(p) <= Date.now()) { months[k].n++; if (c === 0) months[k].nNew++; }
+  }
+  const max = Math.max(1, ...months.map(x => x.n)), name = m => m.toLocaleDateString('en-US', { month: 'short' });
+  $('months').innerHTML = months.map(({ m, n, nNew }, k) => `<div class="col${k === 11 ? ' partial' : ''}" title="${name(m)}: ${n} ${n === 1 ? 'permit' : 'permits'}${nNew ? `, ${nNew} new ${nNew === 1 ? 'building' : 'buildings'}` : ''}">`
+    + `<i class="new" style="height:${nNew / max * 100}%"></i><i class="work" style="height:${(n - nNew) / max * 100}%"></i></div>`).join('');
+  $('mticks').innerHTML = months.map(({ m }, k) => k % 3 !== 2 ? '' : `<span style="left:${k === 11 ? 100 : (k + 0.5) / 12 * 100}%">${k === 11 ? 'This month' : name(m)}</span>`).join('');
+  const peak = months.reduce((a, b) => b.n > a.n ? b : a);
+  $('strip').setAttribute('aria-label', `Permits near you per month, last 12 months. Busiest: ${name(peak.m)} with ${peak.n}. This month so far: ${months[11].n}.`);
+}
+
+// tapping a closure or project in the card (or a permit in the drawer) flies the map to it
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-c], [data-p]'); if (!b) return;
+  if (b.dataset.c != null) { const l = closureLayers[+b.dataset.c]; l.addTo(layer); map.fitBounds(l.getBounds(), { maxZoom: 18, padding: [80, 80] }); l.openPopup(); }
+  else { const m = markers[+b.dataset.p]; map.setView(m.getLatLng(), 18); m.openPopup(); }
+});
+if (!here) box.pick({ label: 'City Hall, 80 Broad St', lat: 32.77672, lon: -79.93081 }, false);
 </script>
 </body>
 </html>

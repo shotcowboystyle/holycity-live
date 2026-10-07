@@ -9,7 +9,8 @@
   --control-bg: #111823; --button-bg: #16202d;
   --control-line: #617187; /* form controls need 3:1 against their background */
   --alert-bg: #1a1216;
-  --closure: #ffb020; --flood-closure: #ff5a5a; --scheduled-closure: #c084fc; --code-case: #ff7eb6;
+  --closure: #ff8a1f; /* road-work sign orange */ --flood-closure: #ff5a5a; --scheduled-closure: #c084fc; --code-case: #ff7eb6;
+  --font: "Overpass", system-ui, -apple-system, "Segoe UI", sans-serif; /* Overpass descends from Highway Gothic, US road-sign lettering */
   --pipe: #e8eef5; --inlet: #9ad8ff;
 }
 @media (prefers-color-scheme: light) {
@@ -20,6 +21,6 @@
     --accent: #0969da; --warn: #bc4c00; --bad: #cf222e; --good: #1a7f37;
     --control-bg: #ffffff; --button-bg: #f3f5f8; --control-line: #848d97;
     --alert-bg: #fff1f0;
-    --pipe: #3d4b5c; --inlet: #0969da;
+    --pipe: #3d4b5c; --inlet: #0969da; --closure: #c25e00;
   }
 }
