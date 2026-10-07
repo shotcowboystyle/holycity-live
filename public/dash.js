@@ -1,4 +1,4 @@
-// Shared helpers for the 2D dashboards. Leaflet (global L) is loaded by each page before this module.
+// Shared helpers for the dashboards. Leaflet (global L) is loaded by each 2D page before this module.
 export const CITY = 'https://gis.charleston-sc.gov/arcgis2/rest/services/External';
 export const CITY_V1 = 'https://gis.charleston-sc.gov/arcgis/rest/services/External';
 export const PENINSULA = [32.7953, -79.9427]; // center of ZIPs 29401 + 29403
@@ -9,8 +9,6 @@ export const day = ms => ms == null ? '—' : new Date(ms).toLocaleDateString('e
 export const miles = m => `${(m / 1609.34).toFixed(2)} mi`;
 export const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 export const lightTheme = () => matchMedia('(prefers-color-scheme: light)').matches;
-// Phone layout: the map sits in a scrolling page, so one finger scrolls and two fingers move the map.
-export const phoneLayout = () => matchMedia('(max-width: 760px) and (pointer: coarse)').matches;
 
 // Shareable state lives in the shell's query string (?at=…&r=…), so a copied link restores it.
 const topWin = () => {
@@ -45,12 +43,12 @@ export function metersBetween(a, b) { // haversine, [lat, lon]
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+// Full-screen map under the HUD: no zoom buttons (wheel, pinch, double-click and +/- keys zoom), attribution in the dock's #attrib
 export function makeMap(el, center = PENINSULA, zoom = 14) {
-  const phone = phoneLayout();
-  const map = L.map(el, { preferCanvas: true, dragging: !phone }).setView(center, zoom); // pinch still pans and zooms
-  if (phone) { const hint = L.control({ position: 'topright' }); hint.onAdd = () => L.DomUtil.create('div', 'map-hint'); hint.addTo(map).getContainer().textContent = 'Use two fingers to move the map'; }
+  const map = L.map(el, { preferCanvas: true, zoomControl: false }).setView(center, zoom);
+  $('attrib').append(map.attributionControl.getContainer());
   const esri = 'https://services.arcgisonline.com/arcgis/rest/services/Canvas', tone = lightTheme() ? 'Light' : 'Dark';
-  const attribution = 'Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors · Data: City of Charleston';
+  const attribution = 'Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors. Data: City of Charleston';
   L.tileLayer(`${esri}/World_${tone}_Gray_Base/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19, maxNativeZoom: 16, attribution }).addTo(map);
   map.createPane('labels').style.zIndex = 650; map.getPane('labels').style.pointerEvents = 'none';
   L.tileLayer(`${esri}/World_${tone}_Gray_Reference/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19, maxNativeZoom: 16, pane: 'labels' }).addTo(map);
@@ -62,8 +60,8 @@ export function makeMap(el, center = PENINSULA, zoom = 14) {
 const KEY = 'chs-location';
 const LOCATOR = `${CITY_V1}/City_Address_Locator/GeocodeServer`;
 export function addressBox(el, onPick) {
-  el.innerHTML = `<div class="row"><input type="search" placeholder="Address in Charleston, e.g. 80 Broad St" list="${el.id}-dl" aria-label="Address">
-    <button type="button" data-act="go">Go</button><button type="button" data-act="me" title="Use my location">◎</button></div>
+  el.innerHTML = `<div class="row"><input type="search" placeholder="Search an address" list="${el.id}-dl" aria-label="Address">
+    <button type="button" data-act="go">Go</button><button type="button" data-act="me" title="Use my location" aria-label="Use my location">◎</button></div>
     <datalist id="${el.id}-dl"></datalist><div class="sub" data-msg></div>`;
   const input = el.querySelector('input'), dl = el.querySelector('datalist'), msg = el.querySelector('[data-msg]');
   let timer, keys = {};
@@ -119,15 +117,4 @@ export function bars(el, rows, fmtV = v => v.toLocaleString()) {
   el.innerHTML = rows.length ? `<div class="bars">${rows.map(([l, v, c]) =>
     `<span class="lbl" title="${esc(l)}">${esc(l)}</span><span><div class="bar" style="width:${(v / max * 100).toFixed(1)}%;${c ? `background:${c}` : ''}"></div></span><span class="val">${fmtV(v)}</span>`).join('')}</div>`
     : '<div class="sub">None.</div>';
-}
-// Column chart (SVG) for a time series: rows = [[label, value]]; labels shown every `every` columns
-export function columns(el, rows, { every = 3, color = 'var(--accent)', highlightLast = false } = {}) {
-  // viewBox matches the drawn width so labels aren't stretched. ponytail: no redraw on resize, next data refresh fixes it
-  const W = el.clientWidth || 340, H = 130, pad = 18, max = Math.max(1, ...rows.map(r => r[1])), bw = (W - 4) / rows.length;
-  const peak = rows.find(r => r[1] === max), label = rows.length ? `${rows[0][0]} to ${rows.at(-1)[0]}, peak ${max.toLocaleString()}${peak ? ` in ${peak[0]}` : ''}` : 'No data';
-  el.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${rows.map(([l, v], i) => {
-    const h = v / max * (H - pad - 12), x = 2 + i * bw;
-    return `<rect x="${x + 1}" y="${H - pad - h}" width="${bw - 2}" height="${h}" rx="1.5" fill="${color}" opacity="${highlightLast && i === rows.length - 1 ? 0.45 : 0.9}"><title>${esc(l)}: ${v.toLocaleString()}</title></rect>`
-      + (i % every === 0 ? `<text x="${x}" y="${H - 5}">${esc(l)}</text>` : '');
-  }).join('')}<text x="2" y="9">${max.toLocaleString()}</text></svg>`;
 }

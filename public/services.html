@@ -6,48 +6,104 @@
 <title>Service Days · Holy City Live</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="tokens.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap">
 <link rel="stylesheet" href="dash.css">
+<style>
+  :root { --trash: #e6edf3; --yard: #6fcf97; }
+  @media (prefers-color-scheme: light) { :root { --trash: #1f2328; --yard: #1a7f37; } }
+  .sw.trash { background: var(--trash); } .sw.yard { background: var(--yard); }
+  #sched { list-style: none; margin: 10px 0 0; padding: 0; border-top: 1px solid var(--line); }
+  #sched li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+  #sched .sw { margin-right: 6px; vertical-align: middle; }
+  #sched .meta { color: var(--muted); }
+  /* the next two weeks; each pickup day carries a bar in its service's color */
+  #days { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 3px; margin: 0; padding: 0; list-style: none; }
+  #days li { display: grid; justify-items: center; padding: 5px 0 4px; border-radius: 6px; background: color-mix(in srgb, var(--text) 5%, transparent);
+    font-variant-numeric: tabular-nums; }
+  #days .wd { color: var(--muted); font-size: 11px; }
+  #days .dn { font-weight: 800; font-size: 15px; line-height: 1.2; }
+  #days .marks { display: grid; gap: 2px; width: 70%; min-height: 10px; align-content: end; margin-top: 3px; }
+  #days .marks i { height: 4px; border-radius: 2px; }
+  #days .marks .trash { background: var(--trash); } #days .marks .yard { background: var(--yard); }
+  #days .today { box-shadow: inset 0 0 0 1.5px var(--text); }
+  .dock-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+  .dock-key span { display: inline-flex; align-items: center; gap: 6px; }
+  #days .w1 { display: none; }
+  @media (max-width: 760px) { #days { gap: 2px; } #days .dn { font-size: 13px; } #days .w3 { display: none; } #days .w1 { display: inline; } }
+</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 <body>
-<aside class="side">
-  <h1>Service Days</h1>
-  <div class="sub">Trash, yard waste and street sweeping days, your fire station, representatives and more for a City of Charleston address.
-    Click the map to look up any point.</div>
-  <h2>Address</h2>
-  <div id="addr"></div>
-  <div id="cards"><div class="sub" style="margin-top:10px">Search an address to see its services.</div></div>
-  <div class="note">Source: City of Charleston GIS (collection areas, sweeping routes, fire response areas, districts, zoning, FEMA FIRM).
-    Pickup dates don't account for holiday schedule changes. Recycling is collected by Charleston County, so it isn't in City data.
-    Addresses outside City limits will show partial results.</div>
-</aside>
 <div id="map"></div>
+
+<div class="hud">
+  <div id="addr" class="glass"></div>
+  <div class="corner"><button type="button" popovertarget="more">More</button></div>
+
+  <section id="card" class="glass" aria-label="Pickup days">
+    <h1 id="headline">Looking up pickup days…</h1>
+    <p id="detail"></p>
+    <ul id="sched"></ul>
+  </section>
+
+  <div class="dock glass">
+    <ol id="days" aria-label="Pickups in the next two weeks"></ol>
+    <div class="dock-row dock-key">
+      <span><i class="sw line trash"></i>Trash</span><span><i class="sw line yard"></i>Yard waste and bulk</span>
+      <span>Holiday weeks can shift pickups.</span>
+    </div>
+    <div id="attrib"></div>
+  </div>
+</div>
+
+<aside id="more" popover="manual" aria-label="More about this address">
+  <div class="more-head"><h2>More about this address</h2><button type="button" popovertarget="more" popovertargetaction="hide">Close</button></div>
+  <div id="cards"><div class="sub">Search an address to see its services.</div></div>
+  <details>
+    <summary>About this data</summary>
+    <div class="note">City of Charleston GIS: collection areas, sweeping routes, fire response areas, districts, zoning and FEMA flood maps.
+      Pickup days don't account for holiday schedule changes. Recycling is collected by Charleston County, so it isn't in City data.
+      Addresses outside City limits show partial results. Tap the map to look up any point.</div>
+  </details>
+</aside>
+
 <script type="module">
 import { CITY_V1, $, esc, getJSON, query, near, metersBetween, miles, makeMap, addressBox, failed, cssVar } from './dash.js';
+import { daysUntil, dayWord, titleCase } from './say.js';
 
 const NET = `${CITY_V1}/mapnetExternal/MapServer`;
 const AREAS = { garbage: 10, yard: 11, sweepArea: 20, fire: 15, nbhd: 8, districts: 384, zoning: 12, fema: 377 }, SWEEP_STREETS = 19;
-const DAYS = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
 const map = makeMap('map', undefined, 15), layer = L.layerGroup().addTo(map);
 let seq = 0;
-map.on('click', e => box.pick({ label: `Map point ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`, lat: e.latlng.lat, lon: e.latlng.lng }));
+map.on('click', e => box.pick({ label: 'Picked on the map', lat: e.latlng.lat, lon: e.latlng.lng }));
 
-function nextDate(dayName) { // next occurrence of a weekday, today included
-  const want = DAYS.indexOf((dayName ?? '').trim().toUpperCase()); if (want < 0) return '';
-  const d = new Date(); d.setDate(d.getDate() + ((want - d.getDay() + 7) % 7));
-  const today = d.toDateString() === new Date().toDateString();
-  return today ? 'today' : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
 const identify = (lat, lon, layers, tolerance) => getJSON(`${NET}/identify?${new URLSearchParams({
   geometry: `${lon},${lat}`, geometryType: 'esriGeometryPoint', sr: 4326, layers: `all:${layers}`, tolerance,
   mapExtent: `${lon - 0.002},${lat - 0.002},${lon + 0.002},${lat + 0.002}`, imageDisplay: '400,400,96', // ≈1 m per pixel
   returnGeometry: false, returnFieldName: true, f: 'json' })}`).then(d => d.results);
-const card = (title, body) => `<div class="card"><h3>${title}</h3>${body}</div>`;
+const section = (title, body) => `<section><h3>${title}</h3>${body}</section>`;
 const nothing = '<div class="sub">Not in City data for this point.</div>';
+const weekly = day => `every ${titleCase(day)}`;
+const real = v => v && v.trim() && v !== 'Null';
+
+// the next 14 days, with a bar under each day a service comes
+function drawDays(garbage, yard) {
+  const today = new Date();
+  $('days').innerHTML = Array.from({ length: 14 }, (_, k) => {
+    const d = new Date(today); d.setDate(today.getDate() + k);
+    const trash = garbage && daysUntil(garbage.DAY, today) === k % 7, yd = yard && daysUntil(yard.DAY, today) === k % 7;
+    const what = [trash && 'trash', yd && 'yard waste and bulk'].filter(Boolean).join(' and ');
+    return `<li class="${k ? '' : 'today'}" aria-label="${d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${what ? `: ${what}` : ''}">
+      <span class="wd" aria-hidden="true"><span class="w3">${d.toLocaleDateString('en-US', { weekday: 'short' })}</span><span class="w1">${d.toLocaleDateString('en-US', { weekday: 'narrow' })}</span></span><span class="dn" aria-hidden="true">${d.getDate()}</span>
+      <span class="marks">${trash ? '<i class="trash"></i>' : ''}${yd ? '<i class="yard"></i>' : ''}</span></li>`;
+  }).join('');
+}
 
 async function lookup(place) {
   const mySeq = ++seq, { lat, lon } = place;
-  $('cards').innerHTML = '<div class="sub" style="margin-top:10px">Looking up…</div>';
+  $('headline').textContent = 'Looking up pickup days…'; $('detail').textContent = ''; $('sched').innerHTML = '';
   layer.clearLayers();
   L.circleMarker([lat, lon], { radius: 7, color: '#fff', weight: 2, fillColor: cssVar('--accent'), fillOpacity: 1 }).addTo(layer).bindTooltip(esc(place.label));
   map.setView([lat, lon], Math.max(map.getZoom(), 15));
@@ -58,48 +114,61 @@ async function lookup(place) {
       identify(lat, lon, SWEEP_STREETS, 25),                     // sweeping routes: lines within ~25 m
       query(`${NET}/6`, { ...near(lat, lon, 1600), where: '1=1', outFields: 'NAME,ADDRESS,FACUSE', outSR: 4326, f: 'geojson' }),
     ]);
-  } catch (e) { failed($('cards'), 'City service data', e, () => lookup(place)); return; } // shown in panel
+  } catch (e) { $('headline').textContent = 'City service data is unavailable'; failed($('detail'), 'City service data', e, () => lookup(place)); return; } // shown in the card
   if (mySeq !== seq) return;
   const by = id => areas.filter(r => r.layerId === id).map(r => r.attributes);
   const [garbage] = by(AREAS.garbage), [yard] = by(AREAS.yard), [sweep] = by(AREAS.sweepArea), [fire] = by(AREAS.fire);
   const [dist] = by(AREAS.districts), [zone] = by(AREAS.zoning), [fema] = by(AREAS.fema), nbhds = by(AREAS.nbhd);
-  const html = [];
 
-  html.push(card('Trash pickup', garbage ? `<div class="big">${esc(garbage.DAY)}</div><div class="sub">Next: ${nextDate(garbage.DAY)} · collector ${esc(garbage.Collector)}</div>` : nothing));
-  html.push(card('Yard waste &amp; bulk', yard ? `<div class="big">${esc(yard.DAY)}</div><div class="sub">Next: ${nextDate(yard.DAY)} · route ${esc(yard.ROUTE)}</div>` : nothing));
+  // the answer: when the trash goes out, then yard waste, then the sweeper
+  const today = new Date(), n = garbage ? daysUntil(garbage.DAY, today) : null, ny = yard ? daysUntil(yard.DAY, today) : null;
+  const on = k => { const d = new Date(today); d.setDate(today.getDate() + k); return dayWord(k, d); };
+  if (n != null) {
+    $('headline').textContent = `Trash pickup is ${on(n)}`;
+    $('detail').textContent = [n === 1 && 'Roll the cart out tonight.', ny != null && `Yard waste and bulk pickup is ${on(ny)}.`].filter(Boolean).join(' ');
+  } else {
+    $('headline').textContent = 'No City trash pickup here';
+    $('detail').textContent = 'This spot may be outside City of Charleston limits, where the County or a town collects.';
+  }
   const sweepLines = streets.map(r => r.attributes).filter((a, i, all) => all.findIndex(b => b.STREET === a.STREET && b.SERVICE === a.SERVICE) === i);
-  html.push(card('Street sweeping', (sweep ? `<div class="big">${esc(sweep.Name)}</div><div class="sub">${[sweep.PickupDay1, sweep.PickupDay2].filter(Boolean).map(esc).join(' &amp; ')}${sweep.Week ? ` · ${esc(sweep.Week)}` : ''}${sweep.Hours ? ` · ${esc(sweep.Hours)}` : ''}${sweep.Exemptions ? `<br>${esc(sweep.Exemptions)}` : ''}</div>` : '')
-    + (sweepLines.length ? sweepLines.map(a => `<div>${esc(a.STREET)} <span class="sub">· ${esc(a.SERVICE)} · ${esc(a.TIME)}${a.DIRECTION ? ' · ' + esc(a.DIRECTION) + ' side' : ''}</span></div>`).join('') : '')
-    || '<div class="sub">No sweeping route within ~25 m.</div>'));
+  $('sched').innerHTML = [
+    garbage && `<li><i class="sw dot trash"></i><b>Trash</b> <span class="meta">${weekly(garbage.DAY)}</span></li>`,
+    yard && `<li><i class="sw dot yard"></i><b>Yard waste and bulk</b> <span class="meta">${weekly(yard.DAY)}</span></li>`,
+    sweep && `<li><b>Street sweeping</b> <span class="meta">${[sweep.PickupDay1, sweep.PickupDay2].filter(real).map(titleCase).map(esc).join(' and ')}${real(sweep.Week) ? `, ${esc(sweep.Week)}` : ''}${real(sweep.Hours) ? `, ${esc(sweep.Hours)}` : ''}${real(sweep.Exemptions) ? `. ${esc(sweep.Exemptions)}` : ''}</span></li>`,
+    ...sweepLines.map(a => `<li><b>Street sweeping${real(a.STREET) ? `, ${esc(titleCase(a.STREET))}` : ''}</b> <span class="meta">${esc(a.SERVICE)}, ${esc(a.TIME)}${real(a.DIRECTION) ? `, ${esc(a.DIRECTION.toLowerCase())} side` : ''}</span></li>`),
+  ].filter(Boolean).join('');
+  drawDays(garbage, yard);
 
+  // drawer: the rest of what the City knows about this spot
   let fireHtml = nothing;
   if (fire) {
     const num = String(+fire.Station.replace(/\D/g, ''));
     const st = await query(`${NET}/0`, { where: `StationNum = '${num}'`, outFields: 'Label,Address', outSR: 4326, f: 'geojson' }).catch(() => null); // station details are optional
     const s = st?.features[0];
     if (s) L.marker([s.geometry.coordinates[1], s.geometry.coordinates[0]], { title: s.properties.Label }).addTo(layer).bindTooltip(esc(s.properties.Label));
-    fireHtml = `<div class="big">${esc(s?.properties.Label ?? 'Station ' + num)}</div><div class="sub">${s ? `${esc(s.properties.Address)} · ${miles(metersBetween([lat, lon], [s.geometry.coordinates[1], s.geometry.coordinates[0]]))} away` : 'First-due station for this area'}</div>`;
+    fireHtml = `<div>${esc(s?.properties.Label ?? 'Station ' + num)}</div><div class="sub">${s ? `${esc(s.properties.Address)}, ${miles(metersBetween([lat, lon], [s.geometry.coordinates[1], s.geometry.coordinates[0]]))} away` : 'First-due station for this area'}</div>`;
   }
   if (mySeq !== seq) return;
-  html.push(card('Fire station', fireHtml));
-  html.push(card('Representatives', dist ? `<div class="sub">
-    ${dist.CITY_COUNCILMEMBER && dist.CITY_COUNCILMEMBER !== 'Null' ? `City Council ${esc(dist.CITY_COUNCIL_DISTRICT)}: <b style="color:var(--text)">${esc(dist.CITY_COUNCILMEMBER)}</b><br>` : 'Outside City Council districts<br>'}
-    County Council ${esc(dist.CC_CNTY_COUNCIL_DISTRICT)}${dist.CC_CNTY_COUNCILOR && dist.CC_CNTY_COUNCILOR !== 'Null' ? ': ' + esc(dist.CC_CNTY_COUNCILOR) : ''}<br>
-    SC House ${esc(dist.SC_HOUSE_DISTRICT)} · SC Senate ${esc(dist.SC_SENATE_DISTRICT)} · US House ${esc(dist.US_HOUSE_DISTRICT)}</div>` : nothing));
-  html.push(card('Neighborhood association', nbhds.length ? nbhds.map(n => `<div>${esc(n.FULL_ASSOC_NAME || n.NAME)} <span class="sub">· ${esc(n.STATUS)}</span></div>`).join('') : nothing));
-  html.push(card('Zoning &amp; flood zone', `<div>Zoning <b>${esc(zone?.ZONE_BASE ?? '—')}</b></div><div>FEMA zone <b>${esc(fema?.FLD_ZONE ?? '—')}</b>
-    <span class="sub">${fema?.ZONE_SUBTY && fema.ZONE_SUBTY !== 'Null' ? '· ' + esc(fema.ZONE_SUBTY.toLowerCase()) : ''}${+fema?.STATIC_BFE > -9999 ? ` · base flood elev. ${esc(fema.STATIC_BFE)} ft` : ''}</span></div>`));
   const nearest = parks.features.filter(f => f.geometry).map(f => {
     const ll = L.geoJSON(f).getBounds().getCenter();
     return { p: f.properties, ll, d: metersBetween([lat, lon], [ll.lat, ll.lng]) };
   }).sort((a, b) => a.d - b.d).filter((x, i, all) => all.findIndex(y => y.p.NAME === x.p.NAME) === i).slice(0, 4);
-  for (const n of nearest) L.circleMarker(n.ll, { radius: 5, color: cssVar('--good'), weight: 1, fillOpacity: 0.8 }).addTo(layer).bindTooltip(esc(n.p.NAME));
-  html.push(card('Nearby parks', nearest.length ? nearest.map(n => `<div>${esc(n.p.NAME)} <span class="sub">· ${miles(n.d)}</span></div>`).join('') : '<div class="sub">None within 1 mile.</div>'));
-  $('cards').innerHTML = html.join('');
+  for (const p of nearest) L.circleMarker(p.ll, { radius: 5, color: cssVar('--good'), weight: 1, fillOpacity: 0.8 }).addTo(layer).bindTooltip(esc(p.p.NAME));
+  $('cards').innerHTML = [
+    section('Fire station', fireHtml),
+    section('Representatives', dist ? `<div class="sub">
+      ${real(dist.CITY_COUNCILMEMBER) ? `City Council ${esc(dist.CITY_COUNCIL_DISTRICT)}: <b style="color:var(--text)">${esc(dist.CITY_COUNCILMEMBER)}</b><br>` : 'Outside City Council districts<br>'}
+      County Council ${esc(dist.CC_CNTY_COUNCIL_DISTRICT)}${real(dist.CC_CNTY_COUNCILOR) ? ': ' + esc(dist.CC_CNTY_COUNCILOR) : ''}<br>
+      SC House ${esc(dist.SC_HOUSE_DISTRICT)}, SC Senate ${esc(dist.SC_SENATE_DISTRICT)}, US House ${esc(dist.US_HOUSE_DISTRICT)}</div>` : nothing),
+    section('Neighborhood association', nbhds.length ? nbhds.map(a => `<div>${esc(a.FULL_ASSOC_NAME || a.NAME)} <span class="sub">${esc(a.STATUS)}</span></div>`).join('') : nothing),
+    section('Zoning and flood zone', `<div>Zoning <b>${esc(zone?.ZONE_BASE ?? '—')}</b></div><div>FEMA flood zone <b>${esc(fema?.FLD_ZONE ?? '—')}</b>
+      <span class="sub">${real(fema?.ZONE_SUBTY) ? esc(fema.ZONE_SUBTY.toLowerCase()) : ''}${+fema?.STATIC_BFE > -9999 ? `, base flood elevation ${esc(fema.STATIC_BFE)} ft` : ''}</span></div>`),
+    section('Nearby parks', nearest.length ? nearest.map(p => `<div>${esc(p.p.NAME)} <span class="sub">${miles(p.d)}</span></div>`).join('') : '<div class="sub">None within 1 mile.</div>'),
+  ].join('');
 }
 // created last: a saved address triggers lookup() immediately, so everything it uses must exist first
 const box = addressBox($('addr'), lookup);
-if (!$('addr').querySelector('[data-msg]').textContent) box.pick({ label: '80 Broad St, 29401 (City Hall) — search to change', lat: 32.77672, lon: -79.93081 }, false);
+if (!$('addr').querySelector('[data-msg]').textContent) box.pick({ label: 'City Hall, 80 Broad St', lat: 32.77672, lon: -79.93081 }, false);
 </script>
 </body>
 </html>

@@ -5,54 +5,49 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Flood &amp; Heat Risk · Holy City Live</title>
 <link rel="stylesheet" href="tokens.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap">
+<link rel="stylesheet" href="dash.css">
 <style>
-  * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
-    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
-  #view { position: fixed; inset: 0; }
-  .panel { position: fixed; top: 12px; background: var(--glass); border: 1px solid var(--line);
-    border-radius: 10px; padding: 12px 14px; max-height: calc(100% - 24px); overflow-y: auto;
-    backdrop-filter: blur(6px); }
-  #left { left: 12px; width: 300px; }
-  #right { right: 12px; width: 320px; }
-  h1 { font-size: 16px; margin: 0 0 2px; }
-  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
-    margin: 14px 0 6px; font-weight: 600; }
-  .sub { color: var(--muted); font-size: 12px; }
-  label { display: flex; align-items: center; gap: 8px; margin: 4px 0; cursor: pointer; }
-  input[type=range] { width: 100%; accent-color: var(--accent); }
-  select, input[type=search] { width: 100%; background: var(--control-bg); color: var(--text); border: 1px solid var(--control-line);
-    border-radius: 6px; padding: 4px 6px; font: inherit; }
-  #addr .row > input { flex: 1; } #addr button { flex: 0 0 auto; }
-  button { background: var(--button-bg); color: var(--text); border: 1px solid var(--control-line); border-radius: 6px;
-    padding: 4px 10px; cursor: pointer; white-space: nowrap; }
-  button:hover { border-color: var(--accent); }
-  .row { display: flex; gap: 8px; align-items: center; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-  .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
-  .kv span:nth-child(odd) { color: var(--muted); }
-  .kv span:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; }
-  #when { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .tag { display: inline-block; padding: 1px 7px; border-radius: 99px; font-size: 11px; font-weight: 600; color: #0b0f14; }
+  /* Ride-check colors: one water ramp (tide and rain alike), sign yellow for wet spots, red for flooding.
+     Dry stays a quiet neutral so the strip only gets loud when there's risk. */
+  :root {
+    --water: #4fc8ff; --water-deep: #1d4fe0; --sign: #ffc21a; --stop: var(--flood-closure); --dry: #4a5a6e;
+    --closure: #e6edf3; /* non-flood closures: neutral here, so yellow and red only ever mean water */
+    --level1: var(--sign); --level2: var(--stop);
+  }
+  @media (prefers-color-scheme: light) { :root { --sign: #b07d00; --dry: #aab4c0; --closure: #1f2328; } }
+  #alertPill { display: inline-block; margin: 0 0 8px; padding: 2px 10px; border: 1px solid var(--stop); border-radius: 99px; font-size: 12px; font-weight: 600; }
+  #weather { color: var(--muted); font-size: 12px; }
+  #spot { padding-top: 8px; border-top: 1px solid var(--line); margin-top: 10px !important; }
+  .sw.water { background: linear-gradient(90deg, var(--water), var(--water-deep)); }
+  .sw.flood { height: 3px; background: var(--flood-closure); }
+  .sw.closed { height: 3px; background: var(--closure); }
+  .sw.heat { width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(135deg, #f2c94c, #eb5757 60%, #b5179e); }
+  .sw.sat { width: 10px; height: 10px; background: linear-gradient(135deg, #5b7a4a, #a08b62 55%, #2f5d7c); }
+  .hud:has(#lRoads:not(:checked)) .key .road { display: none; }
+
+  /* the 48-hour strip: bar height = harbor level, color = street flooding */
+  #strip { touch-action: none; cursor: pointer; border-radius: 6px; }
+  #bars { display: flex; align-items: flex-end; gap: 2px; height: 56px; }
+  #bars i { flex: 1; min-height: 3px; border-radius: 2px 2px 0 0; background: var(--dry); }
+  #bars i[data-level="1"] { background: var(--sign); }
+  #bars i[data-level="2"] { background: var(--stop); }
+  #bars i.sel { box-shadow: 0 0 0 2px var(--text); }
+  #heatKey { display: none; flex: 1; min-width: 200px; max-width: 320px; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .dock:has(#lHeat:checked) #heatKey { display: flex; }
+  #heatKey .ramp { flex: 1; margin: 0; }
+  .ramp.heat { background: linear-gradient(90deg, transparent, #f2c94c 8%, #f2994a 29%, #eb5757 55%, #b5179e 100%); } /* 76 → 125 °F */
+
+  #when { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
   canvas.chart { width: 100%; height: 120px; display: block; }
   .alert { border-left: 3px solid var(--major); padding: 4px 8px; margin: 4px 0; background: var(--alert-bg); border-radius: 4px; }
-  .ramp { height: 8px; border-radius: 4px; margin: 4px 0 2px; }
-  .ramp-l { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
-  .ticks { position: relative; height: 14px; color: var(--muted); font-size: 11px; }
-  .ticks span { position: absolute; transform: translateX(-50%); }
-  .ticks span:first-child { transform: none; } .ticks span:last-child { transform: translateX(-100%); }
-  #sources li { margin: 2px 0; }
   #sources { padding-left: 16px; margin: 4px 0; color: var(--muted); font-size: 12px; }
-  .ok { color: var(--good); } .bad { color: var(--major); }
-  #loading { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--glass);
-    border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px; color: var(--muted); }
-  a { color: var(--accent); }
-  @media (max-width: 760px) {
-    .panel { position: relative; top: auto; left: auto; right: auto; width: auto; margin: 8px 16px; max-height: none; }
-    body { overflow-y: auto; }
-    #view { position: relative; height: 60vh; }
-    button, select, input[type=search], label, input[type=range] { min-height: 44px; }
-  }
+  #sources li { margin: 2px 0; }
+  #loading { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); background: var(--glass); z-index: 1001;
+    border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px; color: var(--muted); font-size: 12px; }
+  @media (max-width: 760px) { #bars { height: 44px; gap: 1px; } #loading { top: 64px; } }
 </style>
 <script type="importmap">
 { "imports": {
@@ -64,104 +59,155 @@
 <body>
 <div id="view"></div>
 
-<aside id="left" class="panel">
-  <h1>Charleston Flood &amp; Heat Risk</h1>
-  <div class="sub" id="howto">Drag to pan, right-drag to rotate, scroll to zoom, click to inspect.</div>
+<div class="hud">
+  <div id="addr" class="glass"></div>
 
-  <h2>Address</h2>
-  <div id="addr"></div>
-
-  <h2>Time</h2>
-  <div id="when">…</div>
-  <div class="sub" id="whenRel"></div>
-  <input id="time" type="range" aria-label="Time" min="0" max="216" value="48">
-  <div class="row"><button id="play">▶ Play</button><button id="now">Now</button>
-    <span class="sub">−48 h observed · +7 d forecast</span></div>
-
-  <h2>Layers</h2>
-  <label><input type="checkbox" id="lFlood" checked> Tidal + surge flood (bathtub)</label>
-  <label><input type="checkbox" id="lRain" checked> Rain ponding (radar + forecast, compound with tide)</label>
-  <label><input type="checkbox" id="lHeat"> Heat index + local heat islands</label>
-  <label><input type="checkbox" id="lFema"> FEMA flood zones (NFHL)</label>
-  <label><input type="checkbox" id="lRoads" checked> City road closures</label>
-  <label><input type="checkbox" id="lStorm"> Stormwater inlets &amp; pipes</label>
-  <label><input type="checkbox" id="lCanopy"> Tree canopy (City)</label>
-
-  <h2>Future scenarios</h2>
-  <div class="grid2">
-    <div><div class="sub">NOAA 2022 sea level rise</div><select id="slrScen" aria-label="NOAA 2022 sea level rise scenario"></select></div>
-    <div><div class="sub">Year</div><select id="slrYear" aria-label="Sea level rise year">
-      <option value="0">Today</option><option>2030</option><option>2040</option><option>2050</option>
-      <option>2060</option><option>2080</option><option>2100</option></select></div>
+  <div class="corner">
+    <button id="recenter" type="button" aria-label="Back to downtown" title="Back to downtown">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+    </button>
+    <button type="button" popovertarget="more">More</button>
   </div>
-  <div class="sub" style="margin-top:6px">Storm surge what-if: <b id="surgeV">+0.0 ft</b></div>
-  <input id="surge" type="range" aria-label="Storm surge what-if" min="0" max="10" step="0.5" value="0">
 
-  <h2>Rain model calibration</h2>
-  <div class="sub">Drainage + infiltration: <b id="drainV">1.00 in/h</b></div>
-  <input id="drain" type="range" aria-label="Drainage + infiltration" min="0" max="2" step="0.05" value="1">
-  <div class="sub">Runoff concentration into low spots: <b id="concV">4×</b></div>
-  <input id="conc" type="range" aria-label="Runoff concentration into low spots" min="1" max="20" step="1" value="4">
-  <div class="sub">Drainage drops to zero as the harbor rises from MHHW to minor flood stage (outfalls submerged).
-    Defaults fit the 15 City flood closures of Oct 4, 2026 (12 of 15 reproduced) — one event, so treat as a starting point.</div>
+  <section id="card" class="glass" aria-label="Ride check">
+    <p id="alertPill" hidden></p>
+    <h1 id="headline">Checking tides and rain…</h1>
+    <p id="detail"></p>
+    <p id="closuresNow" hidden></p>
+    <p id="weather"></p>
+    <p id="spot" hidden></p>
+    <div class="key">
+      <span><i class="sw water"></i>Standing water</span>
+      <span class="road"><i class="sw flood"></i>Closed for flooding</span>
+      <span class="road"><i class="sw closed"></i>Closed, other reason</span>
+    </div>
+  </section>
 
-  <h2>View</h2>
-  <button id="recenter" style="margin-bottom:6px">Recenter on 29401 / 29403</button>
-  <select id="basemap" aria-label="Basemap" style="margin-bottom:6px"><option value="dark">Dark basemap</option><option value="light">Light basemap</option><option value="satellite">Satellite</option></select>
-  <div class="sub">Vertical exaggeration: <b id="exagV">12×</b></div>
-  <input id="exag" type="range" aria-label="Vertical exaggeration" min="1" max="40" value="12">
+  <div class="dock glass">
+    <div id="strip" role="slider" tabindex="0" aria-label="Pick an hour in the next 48 hours" aria-valuemin="0" aria-valuemax="47" aria-valuenow="0">
+      <div id="bars"></div>
+      <div id="ticks" class="strip-ticks" aria-hidden="true"></div>
+    </div>
+    <div class="dock-row">
+      <div class="toggles" role="group" aria-label="Map layers">
+        <label class="toggle"><input type="checkbox" id="lRoads" checked><i class="sw flood"></i>Closed streets</label>
+        <label class="toggle"><input type="checkbox" id="lHeat"><i class="sw heat"></i>Heat</label>
+        <label class="toggle"><input type="checkbox" id="lSat"><i class="sw sat"></i>Satellite</label>
+      </div>
+      <div id="heatKey"><span>Comfortable</span><div class="ramp heat"></div><span>Dangerous</span></div>
+    </div>
+    <div id="attrib">Basemap © Esri, HERE, Garmin, OpenStreetMap contributors. Elevation: USGS 3DEP.</div>
+  </div>
+</div>
 
-  <h2>Legend</h2>
-  <div class="sub">Flooded land, by depth</div>
-  <div class="ramp" style="background:linear-gradient(90deg,#33ccff,#0040e0)"></div>
-  <div class="ramp-l"><span>0 ft</span><span>5+ ft</span></div>
-  <div class="sub" style="margin-top:6px">Rain ponding, by depth</div>
-  <div class="ramp" style="background:linear-gradient(90deg,#80f2b3,#009980)"></div>
-  <div class="ramp-l"><span>2 in</span><span>2+ ft</span></div>
-  <div class="sub" style="margin-top:6px">Heat index (°F, NWS categories)</div>
-  <div class="ramp" style="background:linear-gradient(90deg,#2e7dd1 0%,#97cc05 14.5%,#f2c94c 18.2%,#f2994a 36.4%,#eb5757 60%,#b5179e 100%)"></div>
-  <div class="ticks"><span style="left:0">70</span><span style="left:18.2%">80</span><span style="left:36.4%">90</span><span style="left:60%">103</span><span style="left:100%">125</span></div>
-  <div class="sub" style="margin-top:6px"><span style="color:#9e5cf2">■</span> FEMA 1% annual chance (AE/VE) &nbsp;
-    <span style="color:#ff8c00">■</span> 0.2%</div>
-  <div class="sub"><span style="color:var(--pipe)">━</span> storm pipe &nbsp; <span style="color:var(--inlet)">•</span> storm inlet &nbsp;
-    <span style="color:#2eb852">■</span> tree canopy</div>
-  <div class="sub"><span style="color:var(--flood-closure)">■</span> flood closure &nbsp;
-    <span style="color:var(--closure)">■</span> other closure</div>
+<aside id="more" popover="manual" aria-label="Map tools">
+  <div class="more-head"><h2>Map tools</h2><button type="button" popovertarget="more" popovertargetaction="hide">Close</button></div>
+
+  <details open>
+    <summary>Any hour</summary>
+    <div id="when">…</div>
+    <div class="sub" id="whenRel"></div>
+    <input id="time" type="range" aria-label="Time" min="0" max="216" value="48">
+    <div class="row"><button id="play" type="button">▶ Play</button><button id="now" type="button">Now</button>
+      <span class="sub">Past 2 days to next 7</span></div>
+  </details>
+
+  <details open>
+    <summary>Harbor water level</summary>
+    <div class="sub">Charleston Harbor gauge, NOAA 8665530</div>
+    <div class="row" style="justify-content:space-between">
+      <div><b id="wl" style="font-size:20px">…</b> <span class="sub">ft MLLW</span></div>
+      <span id="wlCat" class="tag"></span>
+    </div>
+    <div class="sub" id="wlNote"></div>
+    <canvas id="tideChart" class="chart" role="img" aria-label="Harbor water level chart, loading"></canvas>
+    <div class="sub" style="font-size:11px"><span style="color:var(--accent)">━</span> observed
+      <span style="color:var(--accent)">┅</span> NWS forecast <span style="color:#2dd4bf">┅</span> STOFS
+      <span style="color:var(--muted)">━</span> astronomical <span style="color:#50dcaa">▮</span> rain</div>
+  </details>
+
+  <details>
+    <summary>More layers</summary>
+    <label><input type="checkbox" id="lFlood" checked> Tidal + surge flood (bathtub)</label>
+    <label><input type="checkbox" id="lRain" checked> Rain ponding (radar + forecast, compound with tide)</label>
+    <label><input type="checkbox" id="lFema"> FEMA flood zones (NFHL)</label>
+    <label><input type="checkbox" id="lStorm"> Stormwater inlets &amp; pipes</label>
+    <label><input type="checkbox" id="lCanopy"> Tree canopy (City)</label>
+  </details>
+
+  <details>
+    <summary>What if</summary>
+    <div class="grid2">
+      <div><div class="sub">NOAA 2022 sea level rise</div><select id="slrScen" aria-label="NOAA 2022 sea level rise scenario"></select></div>
+      <div><div class="sub">Year</div><select id="slrYear" aria-label="Sea level rise year">
+        <option value="0">Today</option><option>2030</option><option>2040</option><option>2050</option>
+        <option>2060</option><option>2080</option><option>2100</option></select></div>
+    </div>
+    <div class="sub" style="margin-top:6px">Storm surge: <b id="surgeV">+0.0 ft</b></div>
+    <input id="surge" type="range" aria-label="Storm surge what-if" min="0" max="10" step="0.5" value="0">
+  </details>
+
+  <details>
+    <summary>Rain model calibration</summary>
+    <div class="sub">Drainage + infiltration: <b id="drainV">1.00 in/h</b></div>
+    <input id="drain" type="range" aria-label="Drainage + infiltration" min="0" max="2" step="0.05" value="1">
+    <div class="sub">Runoff concentration into low spots: <b id="concV">4×</b></div>
+    <input id="conc" type="range" aria-label="Runoff concentration into low spots" min="1" max="20" step="1" value="4">
+    <div class="sub">Drainage drops to zero as the harbor rises from MHHW to minor flood stage (outfalls submerged).
+      Defaults fit the 15 City flood closures of Oct 4, 2026 (12 of 15 reproduced). That's one event, so treat them as a starting point.</div>
+  </details>
+
+  <details>
+    <summary>View</summary>
+    <div class="sub" id="howto">Drag to pan, right-drag to rotate, scroll to zoom, click to inspect.</div>
+    <div class="sub" style="margin-top:6px">Vertical exaggeration: <b id="exagV">12×</b></div>
+    <input id="exag" type="range" aria-label="Vertical exaggeration" min="1" max="40" value="12">
+  </details>
+
+  <details>
+    <summary>Weather and air</summary>
+    <div class="kv" id="wx"></div>
+    <div class="row" style="justify-content:space-between;margin-top:8px">
+      <div><b id="aqi" style="font-size:20px">…</b> <span class="sub">US AQI</span></div>
+      <span id="aqiCat" class="tag"></span>
+    </div>
+    <div class="kv" id="aq" style="margin-top:4px"></div>
+  </details>
+
+  <details>
+    <summary>Weather alerts</summary>
+    <div id="alerts" class="sub">…</div>
+  </details>
+
+  <details>
+    <summary>This spot in detail</summary>
+    <div id="inspect" class="sub">Tap the map.</div>
+  </details>
+
+  <details>
+    <summary>Legend</summary>
+    <div class="sub">Water on normally dry land, by depth (tide or rain)</div>
+    <div class="ramp" style="background:linear-gradient(90deg,var(--water),var(--water-deep))"></div>
+    <div class="ramp-l"><span>0 in</span><span>1 ft+</span></div>
+    <div class="sub" style="margin-top:6px">Heat index (°F, NWS categories; no tint below 80)</div>
+    <div class="ramp heat"></div>
+    <div class="ticks"><span style="left:0">76</span><span style="left:8%">80</span><span style="left:29%">90</span><span style="left:55%">103</span><span style="left:100%">125</span></div>
+    <div class="sub" style="margin-top:6px"><span style="color:#9e5cf2">■</span> FEMA 1% annual chance (AE/VE) &nbsp;
+      <span style="color:#ff8c00">■</span> 0.2%</div>
+    <div class="sub"><span style="color:var(--pipe)">━</span> storm pipe &nbsp; <span style="color:var(--inlet)">•</span> storm inlet &nbsp;
+      <span style="color:#2eb852">■</span> tree canopy</div>
+    <div class="sub"><span style="color:var(--flood-closure)">━</span> closed for flooding &nbsp;
+      <span style="color:var(--closure)">━</span> closed, other reason</div>
+  </details>
+
+  <details>
+    <summary>Data sources</summary>
+    <ul id="sources"></ul>
+  </details>
 </aside>
 
-<aside id="right" class="panel">
-  <h2 style="margin-top:0">Charleston Harbor gauge (NOAA 8665530)</h2>
-  <div class="row" style="justify-content:space-between">
-    <div><b id="wl" style="font-size:20px">…</b> <span class="sub">ft MLLW</span></div>
-    <span id="wlCat" class="tag"></span>
-  </div>
-  <div class="sub" id="wlNote"></div>
-  <canvas id="tideChart" class="chart" role="img" aria-label="Harbor water level chart, loading"></canvas>
-  <div class="sub" style="font-size:11px"><span style="color:var(--accent)">━</span> observed
-    <span style="color:var(--accent)">┅</span> NWS forecast <span style="color:#2dd4bf">┅</span> STOFS
-    <span style="color:var(--muted)">━</span> astronomical <span style="color:#50dcaa">▮</span> rain</div>
-
-  <h2>Weather at selected hour (downtown)</h2>
-  <div class="kv" id="wx"></div>
-
-  <h2>Air quality</h2>
-  <div class="row" style="justify-content:space-between">
-    <div><b id="aqi" style="font-size:20px">…</b> <span class="sub">US AQI</span></div>
-    <span id="aqiCat" class="tag"></span>
-  </div>
-  <div class="kv" id="aq" style="margin-top:4px"></div>
-
-  <h2>NWS active alerts</h2>
-  <div id="alerts" class="sub">…</div>
-
-  <h2>Inspector</h2>
-  <div id="inspect" class="sub">Click the map.</div>
-
-  <h2>Data sources</h2>
-  <ul id="sources"></ul>
-</aside>
-
-<div id="loading">Loading USGS 3DEP elevation (~10 s)…</div>
+<div id="loading">Loading street elevations (~10 s)…</div>
 <script type="module" src="app.js"></script>
 </body>
 </html>
