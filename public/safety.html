@@ -6,14 +6,15 @@
 <title>Public Safety Trends · Holy City Live</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="tokens.css">
+<script src="theme.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400..700&family=Public+Sans:wght@400;600;800&display=swap">
 <link rel="stylesheet" href="dash.css">
 <style>
   /* No warning colors on this tab: police activity is shaded in a calm pink-purple scale, never as an alarm */
   :root { --period: #f768a1; --idle: #4a5a6e; --record: #ffd166; }
-  @media (prefers-color-scheme: light) { :root { --period: #c51b8a; --idle: #aab4c0; --record: #b07d00; } }
+  :root[data-theme=light] { --period: #c51b8a; --idle: #aab4c0; --record: #b07d00; }
   #trendLine { color: var(--muted); }
   #caveat { margin-top: 10px !important; }
   .key .ramp5 { display: inline-flex; } .key .ramp5 i { width: 14px; height: 10px; }

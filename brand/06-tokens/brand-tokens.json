@@ -1,0 +1,24 @@
+{
+  "color": {
+    "ink": {
+      "hex": "#141A22",
+      "use": "Primary text, logo on light grounds"
+    },
+    "harbor": {
+      "hex": "#1D4E89",
+      "use": "Accent, links, logo water, app icon ground"
+    },
+    "harbor-light": {
+      "hex": "#8FB6E3",
+      "use": "Accent on Ink only"
+    },
+    "paper": {
+      "hex": "#F6F4EE",
+      "use": "Page ground, reverse logo"
+    }
+  },
+  "font": {
+    "display": "'Newsreader', Georgia, 'Times New Roman', serif",
+    "sans": "'Public Sans', 'Helvetica Neue', Arial, sans-serif"
+  }
+}

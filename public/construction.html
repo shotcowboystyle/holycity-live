@@ -6,14 +6,15 @@
 <title>Construction Near Me · Holy City Live</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="tokens.css">
+<script src="theme.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400..700&family=Public+Sans:wght@400;600;800&display=swap">
 <link rel="stylesheet" href="dash.css">
 <style>
   /* Road-work orange is the loud color here: closures. New buildings are bright dots, every other permit stays muted. */
   :root { --new: #e6edf3; --work: #6b7c91; --level1: var(--closure); --level2: var(--flood-closure); }
-  @media (prefers-color-scheme: light) { :root { --new: #1f2328; --work: #98a2ae; } }
+  :root[data-theme=light] { --new: #1f2328; --work: #98a2ae; }
   .sw.closure { background: var(--closure); } .sw.flooded { background: var(--flood-closure); }
   .sw.scheduled { background: repeating-linear-gradient(90deg, var(--scheduled-closure) 0 4px, transparent 4px 7px); }
   .sw.new { background: var(--new); box-shadow: 0 0 0 1px currentColor; } /* stays visible on a lit toggle */ .sw.work { background: var(--work); }

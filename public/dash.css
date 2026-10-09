@@ -33,7 +33,7 @@ a { color: var(--accent); }
 /* Answer card: one headline that says what matters, a sentence or two, then a short key */
 #card { grid-area: card; align-self: start; border-radius: 14px; padding: 14px 16px; max-height: 100%; overflow-y: auto; }
 #card p { margin: 6px 0 0; }
-#headline { font-size: 22px; line-height: 1.15; font-weight: 800; letter-spacing: -0.01em; margin: 0; font-variant-numeric: tabular-nums; }
+#headline { font: 600 24px/1.15 var(--font-display); margin: 0; font-variant-numeric: tabular-nums; }
 /* warning-sign diamond, only when there's something to warn about; pages set --level1 / --level2 */
 #card[data-level="1"] #headline::before, #card[data-level="2"] #headline::before { content: ''; display: inline-block; width: .55em; height: .55em;
   margin: 0 .5em .12em .1em; rotate: 45deg; border-radius: 2px; background: var(--level1, var(--warn)); }
