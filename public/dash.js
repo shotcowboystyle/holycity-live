@@ -8,7 +8,7 @@ export const money = v => v == null ? '—' : '$' + Math.round(v).toLocaleString
 export const day = ms => ms == null ? '—' : new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 export const miles = m => `${(m / 1609.34).toFixed(2)} mi`;
 export const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-export const lightTheme = () => matchMedia('(prefers-color-scheme: light)').matches;
+export const lightTheme = () => document.documentElement.dataset.theme === 'light';
 
 // Shareable state lives in the shell's query string (?at=…&r=…), so a copied link restores it.
 const topWin = () => {

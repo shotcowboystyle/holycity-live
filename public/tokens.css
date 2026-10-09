@@ -1,26 +1,26 @@
-/* Design tokens for every page. Dark by default, light when the OS asks for it.
+/* Design tokens for every page. Dark or light per data-theme, set by theme.js.
    Map-layer colors (closures, pipes) are read by JS too, via getComputedStyle. */
 :root {
   color-scheme: dark;
-  --bg: #0b0f14; --panel: #0f141c; --card: #131a24; --glass: rgba(15, 20, 28, 0.88);
-  --line: #253041; --text: #e6edf3; --muted: #8b98a8; --hover: #121a25;
-  --accent: #4cc3ff; --warn: #f2994a; --bad: #eb5757; --good: #6fcf97;
+  --hcl-ink: #141A22; --hcl-harbor: #1D4E89; --hcl-harbor-light: #8FB6E3; --hcl-paper: #F6F4EE; /* brand/06-tokens */
+  --bg: var(--hcl-ink); --panel: #18202a; --card: #1d2631; --glass: rgba(20, 26, 34, 0.88);
+  --line: #2c3947; --text: var(--hcl-paper); --muted: #98a3b1; --hover: #1f2935;
+  --accent: var(--hcl-harbor-light); --warn: #f2994a; --bad: #eb5757; --good: #6fcf97;
   --minor: #f2c94c; --moderate: #f2994a; --major: #eb5757;
-  --control-bg: #111823; --button-bg: #16202d;
-  --control-line: #617187; /* form controls need 3:1 against their background */
-  --alert-bg: #1a1216;
+  --control-bg: #19212b; --button-bg: #212b37;
+  --control-line: #66768a; /* form controls need 3:1 against their background */
+  --alert-bg: #24171b;
   --closure: #ff8a1f; /* road-work sign orange */ --flood-closure: #ff5a5a; --scheduled-closure: #c084fc; --code-case: #ff7eb6;
-  --font: "Overpass", system-ui, -apple-system, "Segoe UI", sans-serif; /* Overpass descends from Highway Gothic, US road-sign lettering */
+  --font: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Newsreader", Georgia, "Times New Roman", serif;
   --pipe: #e8eef5; --inlet: #9ad8ff;
 }
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-    --bg: #f6f8fa; --panel: #ffffff; --card: #f3f5f8; --glass: rgba(255, 255, 255, 0.9);
-    --line: #d0d7de; --text: #1f2328; --muted: #59636e; --hover: #eef2f6;
-    --accent: #0969da; --warn: #bc4c00; --bad: #cf222e; --good: #1a7f37;
-    --control-bg: #ffffff; --button-bg: #f3f5f8; --control-line: #848d97;
-    --alert-bg: #fff1f0;
-    --pipe: #3d4b5c; --inlet: #0969da; --closure: #c25e00;
-  }
+:root[data-theme=light] {
+  color-scheme: light;
+  --bg: var(--hcl-paper); --panel: #fbfaf6; --card: #efece4; --glass: rgba(251, 250, 246, 0.9);
+  --line: #d9d4c7; --text: var(--hcl-ink); --muted: #5a6370; --hover: #ebe7dd;
+  --accent: var(--hcl-harbor); /* never Harbor Light on Paper: 1.9:1 */ --warn: #bc4c00; --bad: #cf222e; --good: #1a7f37;
+  --control-bg: #fffefb; --button-bg: #efece4; --control-line: #767c84;
+  --alert-bg: #fbeeec;
+  --pipe: #3d4b5c; --inlet: var(--hcl-harbor); --closure: #c25e00;
 }

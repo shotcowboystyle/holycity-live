@@ -6,13 +6,14 @@
 <title>Service Days · Holy City Live</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="tokens.css">
+<script src="theme.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400..700&family=Public+Sans:wght@400;600;800&display=swap">
 <link rel="stylesheet" href="dash.css">
 <style>
   :root { --trash: #e6edf3; --yard: #6fcf97; }
-  @media (prefers-color-scheme: light) { :root { --trash: #1f2328; --yard: #1a7f37; } }
+  :root[data-theme=light] { --trash: #1f2328; --yard: #1a7f37; }
   .sw.trash { background: var(--trash); } .sw.yard { background: var(--yard); }
   #sched { list-style: none; margin: 10px 0 0; padding: 0; border-top: 1px solid var(--line); }
   #sched li { padding: 6px 0; border-bottom: 1px solid var(--line); }
