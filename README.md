@@ -16,6 +16,7 @@ npm install
 npm run dev      # http://localhost:8765 (wrangler dev: static files + the STOFS proxy)
 npm test         # STOFS parser + plain-language wording tests
 npm run deploy   # Cloudflare Workers
+npx wrangler secret put GA_MEASUREMENT_ID   # optional: Google Analytics 4 (G-XXXX), production only
 ```
 
 No build step and no API keys. The site is plain HTML/JS in `public/`, served as Cloudflare Workers static assets.

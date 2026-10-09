@@ -6,6 +6,7 @@
 <title>Holy City Live</title>
 <meta name="description" content="Live flood, heat, construction, public safety and city-service dashboards for Charleston, SC, built on public NOAA, USGS, FEMA, City and County data.">
 <link rel="stylesheet" href="tokens.css">
+<script src="/ga.js"></script><!-- Google Analytics; empty unless GA_MEASUREMENT_ID is set on the Worker -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Overpass:wght@400;600;800&display=swap">
@@ -47,6 +48,8 @@
   const tabs = [...document.querySelectorAll('[role=tab]')], panes = document.getElementById('panes'), frames = {};
   function show(name) {
     const tab = tabs.find(t => t.dataset.tab === name) ?? tabs[0];
+    if (tab.getAttribute('aria-selected') !== 'true') // one page_view per tab opened; the hash only, never the address/settings in the URL
+      window.gtag?.('event', 'page_view', { page_title: tab.textContent, page_location: location.origin + '/#' + tab.dataset.tab });
     if (!frames[tab.dataset.tab]) {
       const f = document.createElement('iframe');
       f.src = tab.dataset.src; f.title = tab.textContent;

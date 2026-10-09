@@ -1,12 +1,14 @@
 // Cloudflare Worker: static files come from ./public (served without invoking this code);
-// only /api/* runs here (see run_worker_first in wrangler.jsonc).
+// only /api/* and /ga.js run here (see run_worker_first in wrangler.jsonc).
 import { latestStofs } from './stofs.js';
+import { gaScript } from './ga.js';
 
 const CACHE_SECONDS = 1800;
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === '/ga.js') return gaScript(env.GA_MEASUREMENT_ID);
     if (url.pathname !== '/api/stofs') return env.ASSETS.fetch(request);
 
     const key = new Request(url.origin + url.pathname); // ignore query strings so every visitor shares one entry
