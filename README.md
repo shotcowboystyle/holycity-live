@@ -8,13 +8,18 @@ Live civic dashboards for Charleston, SC — [holycity.live](https://holycity.li
 | **Construction Near Me** | What's closed and what's being built around an address: closures first, the biggest projects, a 12-month permit strip, and ¼ / ½ / 1 mile. Under **More**: permit categories, full lists, code cases, older permits |
 | **Public Safety Trends** | Police activity in your neighborhood in plain words (per resident, compared with the rest of the city) and the citywide trend, over a 24-month strip. Under **More**: equity shading, charges, patrol teams |
 | **Service Days** | When the trash goes out, yard waste and street sweeping, on a two-week calendar strip. Under **More**: fire station, representatives, zoning, flood zone, nearby parks |
+| **About** | What the site is, where every number comes from, caveats; marked up for search and answer engines |
+| **Settings** | Light/dark/device theme, reduce animation, forget the saved address, analytics opt-out, offline copy on/off, clear saved data, check for update, install |
+
+Installable as a PWA (manifest with home-screen shortcuts to each dashboard; iOS shows no shortcuts) and works offline:
+`public/sw.js` keeps the app shell, CDN libraries and fonts, plus the last data and tiles each dashboard loaded.
 
 ## Run
 
 ```bash
 npm install
 npm run dev      # http://localhost:8765 (wrangler dev: static files + the STOFS proxy)
-npm test         # STOFS parser + plain-language wording tests
+npm test         # STOFS parser, plain-language wording, SEO and PWA/offline manifest checks
 npm run deploy   # Cloudflare Workers
 npx wrangler secret put GA_MEASUREMENT_ID   # optional: Google Analytics 4 (G-XXXX), production only
 ```
@@ -22,6 +27,8 @@ npx wrangler secret put GA_MEASUREMENT_ID   # optional: Google Analytics 4 (G-XX
 No build step and no API keys. The site is plain HTML/JS in `public/`, served as Cloudflare Workers static assets.
 `src/worker.js` runs only for `/api/stofs`: it proxies NOAA STOFS surge guidance (published on S3 without CORS
 headers) and caches the parsed result at the edge for 30 minutes. Three.js and Leaflet load from CDNs.
+No deploy-time versioning for the service worker: same-origin files are network-first, so a deploy shows up on the next
+online load. Add new pages, scripts or CDN URLs to the lists at the top of `public/sw.js` (`npm test` checks they match).
 
 ## Data sources
 

@@ -1,13 +1,25 @@
 {
+  "id": "/",
   "name": "Holy City Live",
   "short_name": "Holy City Live",
-  "description": "Live civic dashboards for Charleston, SC",
+  "description": "Live flood, heat, construction, public safety and city-service dashboards for Charleston, SC",
+  "lang": "en-US",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "theme_color": "#141A22",
   "background_color": "#141A22",
+  "categories": ["news", "utilities", "weather"],
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Flood & Heat Risk", "short_name": "Flood", "description": "Is water on the streets now or in the next 48 hours?", "url": "/#risk", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Construction Near Me", "short_name": "Construction", "description": "Closures and projects around your address", "url": "/#construction", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Public Safety Trends", "short_name": "Safety", "description": "Police activity in your neighborhood", "url": "/#safety", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Service Days", "short_name": "Services", "description": "Trash, yard waste and street sweeping days", "url": "/#services", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
   ]
 }

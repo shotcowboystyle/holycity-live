@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings · Holy City Live</title>
+<meta name="description" content="Light or dark mode, motion, saved address, analytics, and the offline app copy for Holy City Live.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="stylesheet" href="tokens.css">
+<script src="theme.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400..700&family=Public+Sans:wght@400;600;800&display=swap">
+<link rel="stylesheet" href="page.css">
+</head>
+<body>
+<main>
+<p class="kicker"><a href="/#settings" target="_top">Holy City Live</a> · Settings</p>
+<h1>Settings</h1>
+<p class="sub">Saved on this device only. Nothing here is sent anywhere.</p>
+
+<section aria-labelledby="hAppearance">
+  <h2 id="hAppearance">Appearance</h2>
+  <div role="radiogroup" aria-labelledby="hAppearance">
+    <label class="row"><input type="radio" name="theme" value="system"> Match this device</label>
+    <label class="row"><input type="radio" name="theme" value="light"> Light</label>
+    <label class="row"><input type="radio" name="theme" value="dark"> Dark</label>
+  </div>
+  <label class="row"><input type="checkbox" id="motion"> Reduce animation <span class="sub">(no water ripple on the flood map)</span></label>
+</section>
+
+<section aria-labelledby="hLocation">
+  <h2 id="hLocation">Location</h2>
+  <div class="row-btn"><span id="place">No saved address.</span><button type="button" id="forget" hidden>Forget it</button></div>
+  <p class="sub">The address you search on any dashboard is remembered here so every dashboard opens on it. It never leaves this device.</p>
+</section>
+
+<section aria-labelledby="hPrivacy">
+  <h2 id="hPrivacy">Privacy</h2>
+  <label class="row"><input type="checkbox" id="analytics"> Send anonymous usage statistics</label>
+  <p class="sub">Which dashboards are opened, via Google Analytics. Never the address or location you search. Changes apply the next time the site opens.</p>
+</section>
+
+<section aria-labelledby="hApp">
+  <h2 id="hApp">App &amp; offline</h2>
+  <div class="row-btn"><span id="installMsg">Open this site in your browser's menu to install it.</span><button type="button" id="install" hidden>Install app</button></div>
+  <label class="row"><input type="checkbox" id="offline"> Keep an offline copy</label>
+  <p class="sub">Keeps the dashboards and the last data they loaded on this device, so they open with no connection. Maps and live numbers still need a connection to update.</p>
+  <div class="row-btn"><span id="storage">Saved data: …</span><button type="button" id="clear">Clear saved data</button><button type="button" id="update">Check for update</button></div>
+  <p class="sub" id="status"></p>
+</section>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  const get = k => { try { return localStorage.getItem(k); } catch { return null; } };
+  const set = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { $('status').textContent = 'Storage is blocked in this browser, so settings only last until the page closes.'; } };
+
+  // theme: same storage theme.js reads; the shell hears the storage event and re-skins the open dashboards
+  const theme = get('theme') ?? 'system';
+  document.querySelector(`[name=theme][value=${theme}]`).checked = true;
+  for (const r of document.querySelectorAll('[name=theme]')) r.onchange = () => { set('theme', r.value === 'system' ? null : r.value); applyTheme(); };
+  $('motion').checked = get('motion') === 'reduce';
+  $('motion').onchange = e => set('motion', e.target.checked ? 'reduce' : null);
+
+  const paintPlace = () => {
+    let place = null; try { place = JSON.parse(get('chs-location')); } catch { /* unreadable: treat as none */ }
+    $('place').textContent = place ? `Saved address: ${place.label}` : 'No saved address.';
+    $('forget').hidden = !place;
+  };
+  $('forget').onclick = () => { set('chs-location', null); paintPlace(); };
+  addEventListener('storage', e => { if (e.key === 'chs-location') paintPlace(); }); // picked on a dashboard while this tab is open
+  paintPlace();
+
+  $('analytics').checked = get('analytics') !== 'off';
+  $('analytics').onchange = e => set('analytics', e.target.checked ? null : 'off');
+
+  // install: the shell (top window) owns the beforeinstallprompt event and tells this frame when it has one
+  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  if (standalone) $('installMsg').textContent = 'Installed. Opens full screen from your home screen.';
+  else if (ios) $('installMsg').textContent = 'On iPhone or iPad: open the site in Safari, tap Share, then Add to Home Screen.';
+  addEventListener('message', e => {
+    if (e.origin !== location.origin || e.data?.type !== 'canInstall') return;
+    $('installMsg').textContent = 'Add Holy City Live to your home screen or desktop.'; $('install').hidden = false;
+  });
+  $('install').onclick = () => parent.postMessage({ type: 'install' }, location.origin);
+
+  // offline copy: a service worker registered by the shell; this page can switch it off and on and clear its caches
+  const sw = navigator.serviceWorker, RUNTIME = 'hcl-runtime';
+  const mb = async () => {
+    if (!navigator.storage?.estimate) return $('storage').textContent = 'Saved data: unknown';
+    const { usage = 0 } = await navigator.storage.estimate();
+    $('storage').textContent = `Saved data: ${(usage / 1048576).toFixed(1)} MB`;
+  };
+  $('offline').checked = get('offline') !== 'off';
+  $('offline').disabled = !sw;
+  if (!sw) $('status').textContent = 'This browser can\'t keep an offline copy.';
+  $('offline').onchange = async e => {
+    if (e.target.checked) { set('offline', null); const reg = await sw.register('/sw.js'); reg.active?.postMessage('precache'); $('status').textContent = 'Offline copy on. It fills in as you use the dashboards.'; }
+    else {
+      set('offline', 'off');
+      const reg = await sw.getRegistration(); await reg?.unregister();
+      for (const k of await caches.keys()) await caches.delete(k);
+      $('status').textContent = 'Offline copy removed.';
+    }
+    mb();
+  };
+  $('clear').onclick = async () => { await caches.delete(RUNTIME); $('status').textContent = 'Saved map and data cleared. The app itself is kept.'; mb(); };
+  $('update').onclick = async () => {
+    const reg = await sw?.getRegistration();
+    if (!reg) return $('status').textContent = 'No offline copy to update.';
+    $('status').textContent = 'Checking…';
+    await reg.update();
+    const fresh = reg.waiting ?? await new Promise(res => { // update() resolves while the new worker may still be installing
+      const w = reg.installing; if (!w) return res(null);
+      w.addEventListener('statechange', () => { if (w.state === 'installed') res(w); else if (w.state === 'redundant') res(null); });
+    });
+    if (!fresh) return $('status').textContent = 'Up to date.';
+    sw.addEventListener('controllerchange', () => top.location.reload());
+    fresh.postMessage('skipWaiting'); $('status').textContent = 'Updated. Reloading…';
+  };
+  mb();
+</script>
+</body>
+</html>

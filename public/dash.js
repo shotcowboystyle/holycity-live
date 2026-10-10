@@ -43,15 +43,16 @@ export function metersBetween(a, b) { // haversine, [lat, lon]
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-// Full-screen map under the HUD: no zoom buttons (wheel, pinch, double-click and +/- keys zoom), attribution in the dock's #attrib
+// Full-screen map under the HUD: no zoom buttons (wheel, pinch, double-click and +/- keys zoom), attribution in the dock's #attrib.
+// Tiles are requested with CORS so the service worker can keep them for offline use (opaque responses aren't cached).
 export function makeMap(el, center = PENINSULA, zoom = 14) {
   const map = L.map(el, { preferCanvas: true, zoomControl: false }).setView(center, zoom);
   $('attrib').append(map.attributionControl.getContainer());
   const esri = 'https://services.arcgisonline.com/arcgis/rest/services/Canvas', tone = lightTheme() ? 'Light' : 'Dark';
   const attribution = 'Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors. Data: City of Charleston';
-  L.tileLayer(`${esri}/World_${tone}_Gray_Base/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19, maxNativeZoom: 16, attribution }).addTo(map);
+  L.tileLayer(`${esri}/World_${tone}_Gray_Base/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19, maxNativeZoom: 16, attribution, crossOrigin: true }).addTo(map);
   map.createPane('labels').style.zIndex = 650; map.getPane('labels').style.pointerEvents = 'none';
-  L.tileLayer(`${esri}/World_${tone}_Gray_Reference/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19, maxNativeZoom: 16, pane: 'labels' }).addTo(map);
+  L.tileLayer(`${esri}/World_${tone}_Gray_Reference/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19, maxNativeZoom: 16, pane: 'labels', crossOrigin: true }).addTo(map);
   return map;
 }
 

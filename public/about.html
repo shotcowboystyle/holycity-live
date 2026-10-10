@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About · Holy City Live</title>
+<meta name="description" content="What Holy City Live is: free, open-source live dashboards for flooding, heat, construction, public safety and city services in Charleston, SC, built on public data.">
+<link rel="canonical" href="https://www.holycity.live/about">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Holy City Live">
+<meta property="og:title" content="About · Holy City Live">
+<meta property="og:description" content="What Holy City Live is: free, open-source live dashboards for flooding, heat, construction, public safety and city services in Charleston, SC, built on public data.">
+<meta property="og:url" content="https://www.holycity.live/about">
+<meta property="og:image" content="https://www.holycity.live/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="tokens.css">
+<script src="theme.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400..700&family=Public+Sans:wght@400;600;800&display=swap">
+<link rel="stylesheet" href="page.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://www.holycity.live/#website",
+      "url": "https://www.holycity.live/",
+      "name": "Holy City Live",
+      "description": "Live flood, heat, construction, public safety and city-service dashboards for Charleston, South Carolina, built on public NOAA, USGS, FEMA, City and County data.",
+      "inLanguage": "en-US"
+    },
+    {
+      "@type": "WebApplication",
+      "@id": "https://www.holycity.live/#app",
+      "name": "Holy City Live",
+      "url": "https://www.holycity.live/",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "Any",
+      "browserRequirements": "Requires a modern browser with JavaScript",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "license": "https://opensource.org/licenses/MIT",
+      "about": { "@type": "City", "name": "Charleston", "address": { "@type": "PostalAddress", "addressRegion": "SC", "addressCountry": "US" } },
+      "featureList": "Street flooding now and 48 hours ahead; heat index map; road closures, permits and code cases near an address; police activity by neighborhood; trash, yard waste and street sweeping days; installable, works offline"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "What is Holy City Live?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Holy City Live is a free, open-source website of live civic dashboards for Charleston, South Carolina. It answers everyday questions in plain language: Is water on the streets right now? What is closed or being built near me? How is police activity trending in my neighborhood? When does the trash go out?" } },
+        { "@type": "Question", "name": "Where does the data come from?",
+          "acceptedAnswer": { "@type": "Answer", "text": "All data is public and fetched live: NOAA (Charleston Harbor tide gauge, NWS harbor forecast, STOFS surge guidance, MRMS radar rainfall, NWS alerts), USGS 3DEP elevation, FEMA flood zones, Open-Meteo weather and air quality, City of Charleston GIS (permits, closures, police open data, heat-island models, tree canopy, equity, stormwater, service areas) and Charleston County GIS." } },
+        { "@type": "Question", "name": "How current is it?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Everything loads live from the source when you open a dashboard. Tide observations are minutes old, forecasts update hourly, and City datasets update on the City's own schedule. The flood map looks 48 hours back and 7 days ahead." } },
+        { "@type": "Question", "name": "Is Holy City Live an official City of Charleston or NOAA site?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. It is an independent project that reads public data. It is not affiliated with the City of Charleston, Charleston County, NOAA or any agency. For emergencies and official guidance, follow the City and the National Weather Service." } },
+        { "@type": "Question", "name": "How accurate is the flood map?",
+          "acceptedAnswer": { "@type": "Answer", "text": "It is a model, not a measurement. Tidal flooding is a bathtub fill of USGS elevations from the harbor gauge; rain ponding fills depressions in the terrain and was calibrated against one event. Police counts measure police activity where it happened, not crime rates. City data covers City limits only." } },
+        { "@type": "Question", "name": "Can I install Holy City Live as an app?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. On iPhone and iPad, open the site in Safari, tap Share, then Add to Home Screen. On Android and desktop Chrome or Edge, use the Install button in Settings or the browser's install option. The app opens full screen and keeps working offline with the last data it loaded." } }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<main>
+<p class="kicker"><a href="/#about" target="_top">Holy City Live</a> · About</p>
+<h1>About Holy City Live</h1>
+<p class="lead">Holy City Live is a free, open-source website of live civic dashboards for Charleston, South Carolina. It answers everyday questions in plain language: Is water on the streets right now? What's closed or being built near me? How is police activity trending in my neighborhood? When does the trash go out?</p>
+
+<h2>What does it show?</h2>
+<ul>
+  <li><a href="/#risk" target="_top">Flood &amp; Heat Risk</a>: a 3D map of which Charleston streets are flooding now and over the next 48 hours, from the NOAA harbor gauge, the NWS forecast and radar rain, plus heat index, FEMA flood zones, stormwater and sea level rise what-ifs.</li>
+  <li><a href="/#construction" target="_top">Construction Near Me</a>: road closures, building permits and code cases within a quarter, half or one mile of an address.</li>
+  <li><a href="/#safety" target="_top">Public Safety Trends</a>: police arrests and stops by neighborhood, per resident and compared with the rest of the city, over 24 months.</li>
+  <li><a href="/#services" target="_top">Service Days</a>: trash, yard waste and street sweeping days for any City of Charleston address, plus fire station, representatives, zoning, flood zone and nearby parks.</li>
+</ul>
+
+<h2>Where does the data come from?</h2>
+<p>Every number is public and fetched live from its source when you open a dashboard. Nothing is copied or edited on the way.</p>
+<ul>
+  <li><a href="https://tidesandcurrents.noaa.gov/stationhome.html?id=8665530">NOAA CO-OPS</a> Charleston Harbor tide gauge 8665530 (observed water levels, predictions, datums, flood stages, 2022 sea level rise scenarios); <a href="https://water.noaa.gov/gauges/CHTS1">NWS Water Prediction Service</a> harbor forecast; NOAA STOFS surge guidance; <a href="https://www.nssl.noaa.gov/projects/mrms/">MRMS</a> radar rainfall; <a href="https://www.weather.gov/chs/">NWS Charleston</a> alerts</li>
+  <li><a href="https://www.usgs.gov/3d-elevation-program">USGS 3DEP</a> elevation</li>
+  <li><a href="https://msc.fema.gov/portal/home">FEMA</a> National Flood Hazard Layer</li>
+  <li><a href="https://open-meteo.com/">Open-Meteo</a> weather forecast and CAMS air quality</li>
+  <li><a href="https://gis.charleston-sc.gov/">City of Charleston GIS</a>: permits, code cases, road closures, police open data, heat-island models, tree canopy, neighborhood equity data, storm inlets and pipes, service areas, districts and the address locator</li>
+  <li><a href="https://www.charlestoncounty.org/departments/gis/">Charleston County GIS</a>: storm pipes</li>
+  <li>Census TIGERweb ZIP extents and Esri basemaps</li>
+</ul>
+
+<h2>How current is it?</h2>
+<p>Tide observations are minutes old. Forecasts update hourly. City datasets update on the City's own schedule, usually daily. The flood map looks 48 hours back and 7 days ahead; the police and construction strips cover the last 12 to 24 months.</p>
+
+<h2>Is this an official City of Charleston or NOAA site?</h2>
+<p>No. Holy City Live is an independent project that reads public data. It is not affiliated with the City of Charleston, Charleston County, NOAA or any other agency. For emergencies and official guidance, follow the <a href="https://www.charleston-sc.gov/">City of Charleston</a> and the <a href="https://www.weather.gov/chs/">National Weather Service</a>.</p>
+
+<h2>How accurate is it?</h2>
+<p>The flood map is a model, not a measurement. Tidal flooding is a bathtub fill of USGS street elevations from the harbor gauge; rain ponding fills depressions in the terrain and was calibrated against one storm. Arrests and stops measure police activity where it happened, not crime, and not where people live. City data covers City of Charleston limits; outside them, results are partial. Each dashboard's <em>More</em> panel lists its sources and whether each one loaded.</p>
+
+<h2>Can I install it as an app?</h2>
+<p>Yes. On iPhone and iPad, open the site in Safari, tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. On Android and on desktop Chrome or Edge, use the <a href="/#settings" target="_top">Install button in Settings</a> or the browser's own install option. The app opens full screen and keeps working offline with the last data it loaded.</p>
+
+<h2>Who made it?</h2>
+<p>Holy City Live is open source under the MIT license. The code, data notes and issue tracker are on <a href="https://github.com/shotcowboystyle/holycity-live">GitHub</a>. No account, no ads and no API keys: the site is plain HTML and JavaScript served from Cloudflare.</p>
+<p class="sub">Charleston is nicknamed the Holy City for its church steeples; the logo is a steeple read as a harbor gauge needle.</p>
+</main>
+</body>
+</html>

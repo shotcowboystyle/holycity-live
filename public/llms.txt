@@ -1,0 +1,11 @@
+# Holy City Live
+
+> Free, open-source live civic dashboards for Charleston, South Carolina, built on public NOAA, USGS, FEMA, Open-Meteo, City of Charleston and Charleston County data. Not affiliated with any government agency.
+
+- [Flood & Heat Risk](https://www.holycity.live/risk): which Charleston streets are flooding now and over the next 48 hours (harbor gauge, NWS forecast, radar rain), plus heat index, FEMA flood zones and sea level rise what-ifs.
+- [Construction Near Me](https://www.holycity.live/construction): road closures, building permits and code cases within a quarter, half or one mile of an address.
+- [Public Safety Trends](https://www.holycity.live/safety): police arrests and stops by neighborhood, per resident and over 24 months.
+- [Service Days](https://www.holycity.live/services): trash, yard waste and street sweeping days for any City of Charleston address, plus fire station, representatives, zoning and flood zone.
+- [About](https://www.holycity.live/about): what the site is, where every number comes from, caveats, and how to install it as an app.
+
+Source code: https://github.com/shotcowboystyle/holycity-live (MIT).
