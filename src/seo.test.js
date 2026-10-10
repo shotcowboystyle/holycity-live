@@ -17,3 +17,10 @@ test('sitemap, canonicals and home links agree', () => {
     if (path !== '/') assert.ok(home.includes(`href="${path}"`), `home links ${path}`);
   }
 });
+
+// Settings is a page for people, not search engines: linked from home, kept out of the sitemap and marked noindex
+test('settings is noindex and off the sitemap', () => {
+  assert.match(read('settings.html'), /<meta name="robots" content="noindex">/);
+  assert.ok(!read('sitemap.xml').includes('/settings'));
+  assert.ok(read('index.html').includes('href="/settings"'));
+});

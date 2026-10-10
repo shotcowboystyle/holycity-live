@@ -1,0 +1,25 @@
+/* Reading pages (About, Settings): one column of text over the page background, same tokens as the dashboards. */
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--font); }
+main { max-width: 680px; margin: 0 auto; padding: 20px 16px 48px; }
+.kicker { font: 600 13px/1.3 var(--font); color: var(--muted); margin: 0 0 14px; text-transform: uppercase; letter-spacing: .04em; }
+.kicker a { color: var(--accent); text-decoration: none; }
+h1 { font: 600 30px/1.15 var(--font-display); margin: 0 0 8px; }
+h2 { font: 600 21px/1.2 var(--font-display); margin: 28px 0 6px; }
+p, ul { margin: 8px 0; }
+ul { padding-left: 20px; }
+a { color: var(--accent); }
+.lead { font-size: 17px; }
+.sub { color: var(--muted); font-size: 13px; }
+/* settings: each section is a card of rows; every control is a 44px row */
+section { margin-top: 20px; padding: 4px 16px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+section h2 { font-size: 18px; margin: 12px 0 2px; }
+label.row { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+label.row input { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; flex: 0 0 auto; }
+.row-btn { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 44px; }
+.row-btn span:first-child { flex: 1; min-width: 200px; }
+button { font: inherit; color: inherit; background: var(--button-bg); border: 1px solid var(--control-line); border-radius: 8px; padding: 8px 14px; min-height: 44px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }

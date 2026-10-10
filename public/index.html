@@ -9,6 +9,7 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Holy City Live">
 <meta name="theme-color" content="#141A22">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Holy City Live">
@@ -42,7 +43,8 @@
   nav [role=tab][aria-selected=true] { color: var(--text); border-bottom-color: var(--accent); }
   nav button:focus-visible, nav a[role=tab]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   nav [role=tablist] { display: flex; gap: 2px; }
-  nav #theme { margin-left: auto; }
+  nav .site { margin-left: auto; }
+  #offline { align-self: center; margin: 0 8px; padding: 2px 10px; border: 1px solid var(--warn); border-radius: 99px; color: var(--warn); font-size: 12px; white-space: nowrap; }
   @media (max-width: 760px) { nav button, nav a[role=tab] { min-height: 44px; box-sizing: border-box; } }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   main { position: relative; flex: 1; }
@@ -64,7 +66,11 @@
     <a role="tab" data-tab="safety" href="/safety">Public Safety Trends</a>
     <a role="tab" data-tab="services" href="/services">Service Days</a>
   </div>
-  <button id="theme" type="button"></button>
+  <span id="offline" hidden role="status">Offline: showing what loaded last</span>
+  <div role="tablist" aria-label="Site" class="site">
+    <a role="tab" data-tab="about" href="/about">About</a>
+    <a role="tab" data-tab="settings" href="/settings">Settings</a>
+  </div>
   <button id="share" type="button" title="Copy a link to this tab, address and settings">Copy link</button>
 </nav>
 <main id="panes"></main>
@@ -79,6 +85,7 @@
       const f = document.createElement('iframe');
       f.src = tab.getAttribute('href'); f.title = tab.textContent;
       f.allow = 'geolocation'; // "use my location" in the dashboards
+      if (tab.dataset.tab === 'settings') f.onload = () => { if (installEvt) f.contentWindow.postMessage({ type: 'canInstall' }, location.origin); };
       panes.appendChild(f); frames[tab.dataset.tab] = f;
     }
     for (const t of tabs) {
@@ -99,19 +106,26 @@
   share.onclick = () => navigator.clipboard.writeText(location.href).then(() => { share.textContent = 'Link copied'; },
     () => { share.textContent = 'Copy the address bar'; }) // clipboard blocked: the URL is still shareable by hand
     .then(() => setTimeout(() => { share.textContent = 'Copy link'; }, 2000));
-  // light/dark toggle: the pick is saved for every page; open dashboards reload to redraw their maps (state is in the URL)
-  const theme = document.getElementById('theme'), root = document.documentElement;
-  const paintTheme = () => {
-    theme.textContent = root.dataset.theme === 'light' ? 'Dark mode' : 'Light mode';
-    document.querySelector('meta[name=theme-color]').content = root.dataset.theme === 'light' ? '#F6F4EE' : '#141A22';
-  };
-  theme.onclick = () => {
-    root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light';
-    try { localStorage.setItem('theme', root.dataset.theme); } catch { /* storage blocked: applies until the page closes */ }
-    paintTheme();
-    for (const f of Object.values(frames)) f.contentWindow.location.reload();
-  };
+  // Settings (an iframe tab) writes localStorage; this window hears it as a storage event. Open dashboards reload to
+  // redraw their maps (state is in the URL). chs-location is written on every address pick, so only its removal counts.
+  const paintTheme = () => { document.querySelector('meta[name=theme-color]').content = document.documentElement.dataset.theme === 'light' ? '#F6F4EE' : '#141A22'; };
+  addEventListener('storage', e => {
+    if (e.key === 'theme') { applyTheme(); paintTheme(); }
+    if (e.key === 'theme' || e.key === 'motion' || (e.key === 'chs-location' && e.newValue === null))
+      for (const [name, f] of Object.entries(frames)) if (name !== 'settings') f.contentWindow.location.reload(); // Settings re-skins itself
+  });
   paintTheme();
+  // offline copy (service worker) unless switched off in Settings; the pill shows while the network is gone
+  let offlineOff = false;
+  try { offlineOff = localStorage.getItem('offline') === 'off'; } catch { /* storage blocked: keep the copy */ }
+  if ('serviceWorker' in navigator && !offlineOff) navigator.serviceWorker.register('/sw.js');
+  const offline = document.getElementById('offline');
+  const paintOnline = () => { offline.hidden = navigator.onLine; };
+  addEventListener('online', paintOnline); addEventListener('offline', paintOnline); paintOnline();
+  // install prompt (Chrome/Edge/Android): only this top window gets the event; the Settings frame asks for it with a click
+  let installEvt;
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; frames.settings?.contentWindow.postMessage({ type: 'canInstall' }, location.origin); });
+  addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'install') installEvt?.prompt(); });
   show(location.hash.slice(1));
 </script>
 </body>

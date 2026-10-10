@@ -944,7 +944,8 @@ addressBox($('addr'), place => terrainP.then(() => {
 }));
 $('addr').querySelector('input').placeholder = 'Where are you riding to?';
 
-const still = matchMedia('(prefers-reduced-motion: reduce)').matches; // no water ripple
+let still = matchMedia('(prefers-reduced-motion: reduce)').matches; // no water ripple
+try { still ||= localStorage.getItem('motion') === 'reduce'; } catch { /* storage blocked: follow the OS */ } // Settings override
 const frame = ms => { if (!still) uniforms.uTime.value = ms / 1000; controls.update(); renderer.render(scene, camera); };
 renderer.setAnimationLoop(frame);
 // Dashboard shell (index.html) says when this tab is hidden: stop rendering so the GPU idles.
