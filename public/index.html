@@ -14,8 +14,9 @@
 <meta property="og:site_name" content="Holy City Live">
 <meta property="og:title" content="Holy City Live">
 <meta property="og:description" content="Live flood, heat, construction, public safety and city-service dashboards for Charleston, SC.">
-<meta property="og:url" content="https://holycity.live/">
-<meta property="og:image" content="https://holycity.live/og-image.png">
+<link rel="canonical" href="https://www.holycity.live/">
+<meta property="og:url" content="https://www.holycity.live/">
+<meta property="og:image" content="https://www.holycity.live/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Holy City Live, Charleston, S.C.">
@@ -35,14 +36,15 @@
   nav .logo img { display: block; height: 26px; width: auto; }
   [data-theme=light] .logo .on-dark, [data-theme=dark] .logo .on-light { display: none; }
   nav .logo:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-  nav button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); padding: 11px 12px 9px;
-    font: inherit; cursor: pointer; white-space: nowrap; }
-  nav button:hover { color: var(--text); }
-  nav button[aria-selected=true] { color: var(--text); border-bottom-color: var(--accent); }
-  nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  nav button, nav a[role=tab] { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); padding: 11px 12px 9px;
+    font: inherit; cursor: pointer; white-space: nowrap; text-decoration: none; }
+  nav button:hover, nav a[role=tab]:hover { color: var(--text); }
+  nav [role=tab][aria-selected=true] { color: var(--text); border-bottom-color: var(--accent); }
+  nav button:focus-visible, nav a[role=tab]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   nav [role=tablist] { display: flex; gap: 2px; }
   nav #theme { margin-left: auto; }
-  @media (max-width: 760px) { nav button { min-height: 44px; } }
+  @media (max-width: 760px) { nav button, nav a[role=tab] { min-height: 44px; box-sizing: border-box; } }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   main { position: relative; flex: 1; }
   /* inactive tabs stay laid out (visibility, not display) so maps keep their size and state */
   iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; visibility: hidden; }
@@ -50,16 +52,17 @@
 </style>
 </head>
 <body>
+<h1 class="sr-only">Holy City Live: live flood, heat, construction, public safety and service-day dashboards for Charleston, SC</h1>
 <nav>
   <a href="/" class="logo">
     <img class="on-dark" src="logo-reverse.svg" alt="Holy City Live" width="151" height="26">
     <img class="on-light" src="logo-color.svg" alt="Holy City Live" width="151" height="26">
   </a>
   <div role="tablist" aria-label="Dashboards">
-    <button role="tab" data-tab="risk" data-src="risk.html">Flood &amp; Heat Risk</button>
-    <button role="tab" data-tab="construction" data-src="construction.html">Construction Near Me</button>
-    <button role="tab" data-tab="safety" data-src="safety.html">Public Safety Trends</button>
-    <button role="tab" data-tab="services" data-src="services.html">Service Days</button>
+    <a role="tab" data-tab="risk" href="/risk">Flood &amp; Heat Risk</a>
+    <a role="tab" data-tab="construction" href="/construction">Construction Near Me</a>
+    <a role="tab" data-tab="safety" href="/safety">Public Safety Trends</a>
+    <a role="tab" data-tab="services" href="/services">Service Days</a>
   </div>
   <button id="theme" type="button"></button>
   <button id="share" type="button" title="Copy a link to this tab, address and settings">Copy link</button>
@@ -74,7 +77,7 @@
       window.gtag?.('event', 'page_view', { page_title: tab.textContent, page_location: location.origin + '/#' + tab.dataset.tab });
     if (!frames[tab.dataset.tab]) {
       const f = document.createElement('iframe');
-      f.src = tab.dataset.src; f.title = tab.textContent;
+      f.src = tab.getAttribute('href'); f.title = tab.textContent;
       f.allow = 'geolocation'; // "use my location" in the dashboards
       panes.appendChild(f); frames[tab.dataset.tab] = f;
     }
@@ -85,7 +88,7 @@
     }
     if (location.hash !== '#' + tab.dataset.tab) history.replaceState(null, '', '#' + tab.dataset.tab);
   }
-  for (const t of tabs) t.onclick = () => show(t.dataset.tab);
+  for (const t of tabs) t.onclick = e => { e.preventDefault(); show(t.dataset.tab); }; // real links so crawlers find the dashboards
   document.querySelector('nav').addEventListener('keydown', e => { // arrow keys move between tabs
     const i = tabs.indexOf(document.activeElement); if (i < 0 || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
     const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; next.focus(); show(next.dataset.tab);
