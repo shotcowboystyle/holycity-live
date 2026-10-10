@@ -132,3 +132,7 @@ a { color: var(--accent); }
 @media (max-width: 760px), (pointer: coarse) {
   button, select, .toggle, .seg label, #addr input, #more label, #more input[type=range], .picks button { min-height: 44px; }
 }
+
+/* Page name above the live headline: a stable h1 for search and screen readers, and a way home when opened on its own */
+.kicker { font: 600 11px/1.3 var(--font); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; }
+.kicker a { color: inherit; }
