@@ -61,8 +61,10 @@ export function makeMap(el, center = PENINSULA, zoom = 14) {
 const KEY = 'chs-location';
 const LOCATOR = `${CITY_V1}/City_Address_Locator/GeocodeServer`;
 export function addressBox(el, onPick) {
-  el.innerHTML = `<div class="row"><input type="search" placeholder="Search an address" list="${el.id}-dl" aria-label="Address">
-    <button type="button" data-act="go">Go</button><button type="button" data-act="me" title="Use my location" aria-label="Use my location">◎</button></div>
+  el.innerHTML = `<div class="row"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
+    <input type="search" placeholder="Search an address" list="${el.id}-dl" aria-label="Address" enterkeyhint="search">
+    <button type="button" data-act="go">Go</button><button type="button" data-act="me" title="Use my location" aria-label="Use my location">
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4 4 11l6.5 2.5L13 20z"/></svg></button></div>
     <datalist id="${el.id}-dl"></datalist><div class="sub" data-msg></div>`;
   const input = el.querySelector('input'), dl = el.querySelector('datalist'), msg = el.querySelector('[data-msg]');
   let timer, keys = {};
@@ -105,6 +107,16 @@ export function addressBox(el, onPick) {
   else try { const saved = localStorage.getItem(KEY); if (saved) pick(JSON.parse(saved), false); } catch { /* storage blocked: start empty */ }
   return { pick };
 }
+
+// Phone bottom sheet (see dash.css): tap or swipe the handle to open layers and details, touch the map to tuck them away.
+// Every dashboard has a .hud with a .handle in its card; wide screens ignore .open.
+const hud = document.querySelector('.hud'), handle = hud.querySelector('.handle');
+const openSheet = on => { hud.classList.toggle('open', on); handle.setAttribute('aria-expanded', on); };
+let y0 = 0, swiped = false;
+handle.addEventListener('pointerdown', e => { y0 = e.clientY; swiped = false; handle.setPointerCapture(e.pointerId); });
+handle.addEventListener('pointerup', e => { if (Math.abs(e.clientY - y0) > 20) { swiped = true; openSheet(e.clientY < y0); } });
+handle.addEventListener('click', () => { if (!swiped) openSheet(!hud.classList.contains('open')); }); // a swipe already decided
+document.querySelector('#map, #view').addEventListener('pointerdown', () => openSheet(false));
 
 // Plain-language failure with a retry button; the technical detail stays in the tooltip
 export function failed(el, what, e, retry) {

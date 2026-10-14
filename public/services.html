@@ -24,13 +24,13 @@
   :root { --trash: #e6edf3; --yard: #6fcf97; }
   :root[data-theme=light] { --trash: #1f2328; --yard: #1a7f37; }
   .sw.trash { background: var(--trash); } .sw.yard { background: var(--yard); }
-  #sched { list-style: none; margin: 10px 0 0; padding: 0; border-top: 1px solid var(--line); }
-  #sched li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+  #sched { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+  #sched li { padding: 10px 14px; background: var(--soft); border-radius: 16px; }
   #sched .sw { margin-right: 6px; vertical-align: middle; }
   #sched .meta { color: var(--muted); }
   /* the next two weeks; each pickup day carries a bar in its service's color */
   #days { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: 3px; margin: 0; padding: 0; list-style: none; }
-  #days li { display: grid; justify-items: center; padding: 5px 0 4px; border-radius: 6px; background: color-mix(in srgb, var(--text) 5%, transparent);
+  #days li { display: grid; justify-items: center; padding: 6px 0 5px; border-radius: 12px; background: var(--soft);
     font-variant-numeric: tabular-nums; }
   #days .wd { color: var(--muted); font-size: 11px; }
   #days .dn { font-weight: 800; font-size: 15px; line-height: 1.2; }
@@ -38,8 +38,6 @@
   #days .marks i { height: 4px; border-radius: 2px; }
   #days .marks .trash { background: var(--trash); } #days .marks .yard { background: var(--yard); }
   #days .today { box-shadow: inset 0 0 0 1.5px var(--text); }
-  .dock-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
-  .dock-key span { display: inline-flex; align-items: center; gap: 6px; }
   #days .w1 { display: none; }
   @media (max-width: 760px) { #days { gap: 2px; } #days .dn { font-size: 13px; } #days .w3 { display: none; } #days .w1 { display: inline; } }
 </style>
@@ -50,21 +48,20 @@
 
 <div class="hud">
   <div id="addr" class="glass"></div>
-  <div class="corner"><button type="button" popovertarget="more">More</button></div>
+  <div class="corner"><button type="button" popovertarget="more"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M18 7h2M4 17h3M12 17h8"/><circle cx="15.5" cy="7" r="2.5"/><circle cx="9.5" cy="17" r="2.5"/></svg>More details</button></div>
 
   <section id="card" class="glass" aria-label="Pickup days">
+    <button class="handle" type="button" aria-expanded="false" aria-label="Layers and details"></button>
     <h1 class="kicker"><a href="/#services" target="_top">Holy City Live</a> · Charleston trash &amp; service days</h1>
     <h2 id="headline">Looking up pickup days…</h2>
     <p id="detail"></p>
-    <ul id="sched"></ul>
+    <ul id="sched" class="extra"></ul>
+    <p class="sub extra">Holiday weeks can shift pickups.</p>
   </section>
 
   <div class="dock glass">
+    <p class="cap"><b>Next 2 weeks</b><span><i class="sw line trash"></i>Trash</span><span><i class="sw line yard"></i>Yard waste and bulk</span></p>
     <ol id="days" aria-label="Pickups in the next two weeks"></ol>
-    <div class="dock-row dock-key">
-      <span><i class="sw line trash"></i>Trash</span><span><i class="sw line yard"></i>Yard waste and bulk</span>
-      <span>Holiday weeks can shift pickups.</span>
-    </div>
     <div id="attrib"></div>
   </div>
 </div>

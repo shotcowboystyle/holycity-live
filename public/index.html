@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Holy City Live</title>
 <meta name="description" content="Live flood, heat, construction, public safety and city-service dashboards for Charleston, SC, built on public NOAA, USGS, FEMA, City and County data.">
 <link rel="icon" href="/favicon.ico" sizes="any">
@@ -31,26 +31,51 @@
 <style>
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.4 var(--font); }
   body { display: flex; flex-direction: column; }
-  nav { display: flex; align-items: stretch; gap: 2px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line);
-    overflow-x: auto; flex: 0 0 auto; }
-  nav .logo { align-self: center; display: flex; margin-right: 14px; flex: 0 0 auto; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  /* Wide screens: logo, then soft pill tabs along the top; the selected one is filled. Phones: a bottom tab bar (below). */
+  nav { display: flex; align-items: center; gap: 4px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--edge); flex: 0 0 auto; }
+  nav .logo { display: flex; margin-right: 12px; flex: 0 0 auto; border-radius: 4px; }
   nav .logo img { display: block; height: 26px; width: auto; }
   [data-theme=light] .logo .on-dark, [data-theme=dark] .logo .on-light { display: none; }
   nav .logo:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-  nav button, nav a[role=tab] { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); padding: 11px 12px 9px;
-    font: inherit; cursor: pointer; white-space: nowrap; text-decoration: none; }
-  nav button:hover, nav a[role=tab]:hover { color: var(--text); }
-  nav [role=tab][aria-selected=true] { color: var(--text); border-bottom-color: var(--accent); }
-  nav button:focus-visible, nav a[role=tab]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  nav [role=tablist] { display: flex; gap: 2px; }
-  nav .site { margin-left: auto; }
-  #offline { align-self: center; margin: 0 8px; padding: 2px 10px; border: 1px solid var(--warn); border-radius: 99px; color: var(--warn); font-size: 12px; white-space: nowrap; }
-  @media (max-width: 760px) { nav button, nav a[role=tab] { min-height: 44px; box-sizing: border-box; } }
-  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  nav [role=tablist] { display: flex; gap: 4px; }
+  nav [role=tab], nav button { position: relative; display: flex; align-items: center; gap: 8px; padding: 8px 14px; border: 0; border-radius: 999px;
+    background: none; color: var(--muted); font: 600 14px/1.2 var(--font); text-decoration: none; white-space: nowrap; cursor: pointer; }
+  nav [role=tab]:hover, nav button:hover { color: var(--text); background: var(--soft); }
+  nav [role=tab][aria-selected=true] { background: var(--on); color: var(--on-text); }
+  nav :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  nav svg { display: block; width: 20px; height: 20px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  nav .short, #menuBtn { display: none; }
+  /* About, Settings and Copy link: inline in the bar on wide screens (overriding the closed popover's display: none);
+     on phones the same element is a popover opened by the tab bar's "More" */
+  #menu { display: flex; align-items: center; gap: 4px; position: static; inset: auto; margin: 0 0 0 auto; padding: 0; border: 0; background: none; color: inherit; overflow: visible; }
+  #share { border: 1px solid var(--control-line); }
+  #offline { margin: 0; padding: 6px 12px; text-align: center; font-size: 13px; color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, var(--panel)); }
   main { position: relative; flex: 1; }
   /* inactive tabs stay laid out (visibility, not display) so maps keep their size and state */
   iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; visibility: hidden; }
   iframe.active { visibility: visible; }
+  @media (max-width: 760px) {
+    /* bottom tab bar in thumb reach: icon over a short name, the selected icon sits in a filled pill */
+    nav { order: 1; display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 1fr); gap: 0; padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+      border-bottom: 0; border-top: 1px solid var(--edge); }
+    nav .logo { display: none; }
+    nav > [role=tablist] { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; }
+    nav > [role=tablist] > [role=tab], #menuBtn { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-height: 60px; padding: 4px 2px;
+      border-radius: 16px; font-size: 12px; background: none; color: var(--muted); }
+    nav > [role=tablist] > [role=tab][aria-selected=true] { background: none; color: var(--text); }
+    nav > [role=tablist] svg, #menuBtn svg { box-sizing: border-box; width: 56px; height: 32px; padding: 4px 16px; border-radius: 999px; }
+    nav > [role=tablist] > [aria-selected=true] svg, #menuBtn:has(+ #menu [aria-selected=true]) svg { background: var(--on); color: var(--on-text); }
+    nav .long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    nav .short { display: inline; }
+    #menu { position: fixed; inset: auto 8px calc(80px + env(safe-area-inset-bottom)) auto; flex-direction: column; align-items: stretch; gap: 2px;
+      min-width: 220px; padding: 8px; border: 1px solid var(--edge); border-radius: 22px; background: var(--panel); box-shadow: var(--shadow); }
+    #menu:not(:popover-open) { display: none; }
+    #menu .site { flex-direction: column; gap: 2px; }
+    #menu [role=tab], #menu button { min-height: 52px; padding: 0 16px; border-radius: 14px; font-size: 16px; color: var(--text); }
+    #menu [role=tab][aria-selected=true] { background: var(--on); color: var(--on-text); }
+    #share { border: 0; }
+  }
 </style>
 </head>
 <body>
@@ -61,29 +86,34 @@
     <img class="on-light" src="logo-color.svg" alt="Holy City Live" width="151" height="26">
   </a>
   <div role="tablist" aria-label="Dashboards">
-    <a role="tab" data-tab="risk" href="/risk">Flood &amp; Heat Risk</a>
-    <a role="tab" data-tab="construction" href="/construction">Construction Near Me</a>
-    <a role="tab" data-tab="safety" href="/safety">Public Safety Trends</a>
-    <a role="tab" data-tab="services" href="/services">Service Days</a>
+    <a role="tab" data-tab="risk" href="/risk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3 3.6 6 7.2 6 10.5a6 6 0 0 1-12 0C6 10.2 9 6.6 12 3z"/></svg><span class="long">Flood &amp; Heat Risk</span><span class="short" aria-hidden="true">Flood</span></a>
+    <a role="tab" data-tab="construction" href="/construction"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h4l4.8 16H5.2z"/><path d="M8.2 9h7.6M6.7 14h10.6M3 21h18"/></svg><span class="long">Construction Near Me</span><span class="short" aria-hidden="true">Roadwork</span></a>
+    <a role="tab" data-tab="safety" href="/safety"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.9-7.5-9.5V6z"/></svg><span class="long">Public Safety Trends</span><span class="short" aria-hidden="true">Safety</span></a>
+    <a role="tab" data-tab="services" href="/services"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16M9.5 6.5V4h5v2.5M6 6.5l1 14h10l1-14M10 10.5v6M14 10.5v6"/></svg><span class="long">Service Days</span><span class="short" aria-hidden="true">Trash day</span></a>
   </div>
-  <span id="offline" hidden role="status">Offline: showing what loaded last</span>
-  <div role="tablist" aria-label="Site" class="site">
-    <a role="tab" data-tab="about" href="/about">About</a>
-    <a role="tab" data-tab="settings" href="/settings">Settings</a>
+  <button id="menuBtn" type="button" popovertarget="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"/></svg>More</button>
+  <div id="menu" popover>
+    <div role="tablist" aria-label="Site" class="site">
+      <a role="tab" data-tab="about" href="/about">About</a>
+      <a role="tab" data-tab="settings" href="/settings">Settings</a>
+    </div>
+    <button id="share" type="button" title="Copy a link to this tab, address and settings">Copy link</button>
   </div>
-  <button id="share" type="button" title="Copy a link to this tab, address and settings">Copy link</button>
 </nav>
+<p id="offline" hidden role="status">Offline: showing what loaded last</p>
 <main id="panes"></main>
 <script>
   // Each dashboard is its own page, loaded into an iframe the first time its tab opens and kept alive after.
   const tabs = [...document.querySelectorAll('[role=tab]')], panes = document.getElementById('panes'), frames = {};
+  const tabName = t => t.querySelector('.long')?.textContent ?? t.textContent; // dashboard tabs also carry a short phone label
+  const menu = document.getElementById('menu'), closeMenu = () => { if (menu.matches(':popover-open')) menu.hidePopover(); };
   function show(name) {
     const tab = tabs.find(t => t.dataset.tab === name) ?? tabs[0];
     if (tab.getAttribute('aria-selected') !== 'true') // one page_view per tab opened; the hash only, never the address/settings in the URL
-      window.gtag?.('event', 'page_view', { page_title: tab.textContent, page_location: location.origin + '/#' + tab.dataset.tab });
+      window.gtag?.('event', 'page_view', { page_title: tabName(tab), page_location: location.origin + '/#' + tab.dataset.tab });
     if (!frames[tab.dataset.tab]) {
       const f = document.createElement('iframe');
-      f.src = tab.getAttribute('href'); f.title = tab.textContent;
+      f.src = tab.getAttribute('href'); f.title = tabName(tab);
       f.allow = 'geolocation'; // "use my location" in the dashboards
       if (tab.dataset.tab === 'settings') f.onload = () => { if (installEvt) f.contentWindow.postMessage({ type: 'canInstall' }, location.origin); };
       panes.appendChild(f); frames[tab.dataset.tab] = f;
@@ -95,7 +125,8 @@
     }
     if (location.hash !== '#' + tab.dataset.tab) history.replaceState(null, '', '#' + tab.dataset.tab);
   }
-  for (const t of tabs) t.onclick = e => { e.preventDefault(); show(t.dataset.tab); }; // real links so crawlers find the dashboards
+  for (const t of tabs) t.onclick = e => { e.preventDefault(); show(t.dataset.tab); closeMenu(); }; // real links so crawlers find the dashboards
+  addEventListener('blur', closeMenu); // a tap inside a dashboard frame doesn't reach this page's light dismiss
   document.querySelector('nav').addEventListener('keydown', e => { // arrow keys move between tabs
     const i = tabs.indexOf(document.activeElement); if (i < 0 || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
     const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length]; next.focus(); show(next.dataset.tab);

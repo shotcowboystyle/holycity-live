@@ -30,7 +30,8 @@
   :root[data-theme=light] { --sign: #b07d00; --dry: #aab4c0; --closure: #1f2328; }
   #alertPill { display: inline-block; margin: 0 0 8px; padding: 2px 10px; border: 1px solid var(--stop); border-radius: 99px; font-size: 12px; font-weight: 600; }
   #weather { color: var(--muted); font-size: 12px; }
-  #spot { padding-top: 8px; border-top: 1px solid var(--line); margin-top: 10px !important; }
+  #spot { padding: 10px 14px; background: var(--soft); border-radius: 16px; margin-top: 12px !important; }
+  .sw.wet { background: var(--sign); } .sw.stop { background: var(--stop); }
   .sw.water { background: linear-gradient(90deg, var(--water), var(--water-deep)); }
   .sw.flood { height: 3px; background: var(--flood-closure); }
   .sw.closed { height: 3px; background: var(--closure); }
@@ -39,12 +40,13 @@
   .hud:has(#lRoads:not(:checked)) .key .road { display: none; }
 
   /* the 48-hour strip: bar height = harbor level, color = street flooding */
-  #strip { touch-action: none; cursor: pointer; border-radius: 6px; }
+  #strip { touch-action: none; cursor: pointer; border-radius: 8px; }
   #bars { display: flex; align-items: flex-end; gap: 2px; height: 56px; }
-  #bars i { flex: 1; min-height: 3px; border-radius: 2px 2px 0 0; background: var(--dry); }
+  #bars i { flex: 1; min-height: 4px; border-radius: 3px; background: var(--dry); }
   #bars i[data-level="1"] { background: var(--sign); }
   #bars i[data-level="2"] { background: var(--stop); }
-  #bars i.sel { box-shadow: 0 0 0 2px var(--text); }
+  #bars i.sel { outline: 2px solid var(--text); outline-offset: 1px; }
+  #bars i.sel[data-level="0"] { outline: 0; background: var(--text); } /* a ring round a short dry bar reads as a zero */
   #heatKey { display: none; flex: 1; min-width: 200px; max-width: 320px; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
   .dock:has(#lHeat:checked) #heatKey { display: flex; }
   #heatKey .ramp { flex: 1; margin: 0; }
@@ -57,7 +59,7 @@
   #sources li { margin: 2px 0; }
   #loading { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); background: var(--glass); z-index: 1001;
     border: 1px solid var(--line); border-radius: 99px; padding: 6px 14px; color: var(--muted); font-size: 12px; }
-  @media (max-width: 760px) { #bars { height: 44px; gap: 1px; } #loading { top: 64px; } }
+  @media (max-width: 760px) { #bars { height: 52px; gap: 1.5px; } #loading { top: 76px; } }
 </style>
 <script type="importmap">
 { "imports": {
@@ -74,19 +76,19 @@
 
   <div class="corner">
     <button id="recenter" type="button" aria-label="Back to downtown" title="Back to downtown">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
     </button>
-    <button type="button" popovertarget="more">More</button>
+    <button type="button" popovertarget="more"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M18 7h2M4 17h3M12 17h8"/><circle cx="15.5" cy="7" r="2.5"/><circle cx="9.5" cy="17" r="2.5"/></svg>More tools</button>
   </div>
 
   <section id="card" class="glass" aria-label="Ride check">
+    <button class="handle" type="button" aria-expanded="false" aria-label="Layers and details"></button>
     <p id="alertPill" hidden></p>
     <h1 class="kicker"><a href="/#risk" target="_top">Holy City Live</a> · Charleston flood &amp; heat risk</h1>
     <h2 id="headline">Checking tides and rain…</h2>
     <p id="detail"></p>
     <p id="closuresNow" hidden></p>
-    <p id="weather"></p>
+    <p id="weather" class="extra"></p>
     <p id="spot" hidden></p>
     <div class="key">
       <span><i class="sw water"></i>Standing water</span>
@@ -96,6 +98,7 @@
   </section>
 
   <div class="dock glass">
+    <p class="cap"><b>Next 48 hours</b><span><i class="sw wet"></i>Wet spots</span><span><i class="sw stop"></i>Flooding</span></p>
     <div id="strip" role="slider" tabindex="0" aria-label="Pick an hour in the next 48 hours" aria-valuemin="0" aria-valuemax="47" aria-valuenow="0">
       <div id="bars"></div>
       <div id="ticks" class="strip-ticks" aria-hidden="true"></div>
@@ -106,8 +109,8 @@
         <label class="toggle"><input type="checkbox" id="lHeat"><i class="sw heat"></i>Heat</label>
         <label class="toggle"><input type="checkbox" id="lSat"><i class="sw sat"></i>Satellite</label>
       </div>
-      <div id="heatKey"><span>Comfortable</span><div class="ramp heat"></div><span>Dangerous</span></div>
     </div>
+    <div id="heatKey"><span>Comfortable</span><div class="ramp heat"></div><span>Dangerous</span></div>
     <div id="attrib">Basemap © Esri, HERE, Garmin, OpenStreetMap contributors. Elevation: USGS 3DEP.</div>
   </div>
 </div>

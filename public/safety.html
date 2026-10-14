@@ -28,11 +28,12 @@
   #caveat { margin-top: 10px !important; }
   .key .ramp5 { display: inline-flex; } .key .ramp5 i { width: 14px; height: 10px; }
   .key .ramp5 i:first-child { border-radius: 2px 0 0 2px; } .key .ramp5 i:last-child { border-radius: 0 2px 2px 0; }
+  .sw.period { background: var(--period); } .sw.idle { background: var(--idle); }
   .sw.record { width: 6px; height: 6px; border-radius: 50%; background: var(--record); }
   .hud:has(#lDots:not(:checked)) .key .records { display: none; }
   /* 24 months of activity; the months inside the chosen period are lit */
   #months { display: flex; align-items: flex-end; gap: 2px; height: 48px; }
-  #months i { flex: 1; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--idle); }
+  #months i { flex: 1; min-height: 3px; border-radius: 3px; background: var(--idle); }
   #months i.in { background: var(--period); }
   #months i.partial { opacity: .5; }
   #mticks span { transform: translateX(-50%); }
@@ -44,18 +45,20 @@
 
 <div class="hud">
   <div id="addr" class="glass"></div>
-  <div class="corner"><button type="button" popovertarget="more">More</button></div>
+  <div class="corner"><button type="button" popovertarget="more"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M18 7h2M4 17h3M12 17h8"/><circle cx="15.5" cy="7" r="2.5"/><circle cx="9.5" cy="17" r="2.5"/></svg>More details</button></div>
 
   <section id="card" class="glass" aria-label="Police activity">
+    <button class="handle" type="button" aria-expanded="false" aria-label="Layers and details"></button>
     <h1 class="kicker"><a href="/#safety" target="_top">Holy City Live</a> · Charleston public safety trends</h1>
     <h2 id="headline">Loading police data…</h2>
     <p id="detail"></p>
-    <p id="trendLine" hidden></p>
+    <p id="trendLine" class="extra" hidden></p>
     <p class="sub" id="caveat">This counts police activity where it happened. It isn't a crime rate, and it isn't where people live.</p>
     <div class="key" id="key"></div>
   </section>
 
   <div class="dock glass">
+    <p class="cap"><b>Past 2 years, by month</b><span><i class="sw period"></i>In the count</span></p>
     <div id="strip" role="img" aria-label="Activity by month, loading">
       <div id="months"></div>
       <div class="strip-ticks" id="mticks" aria-hidden="true"></div>

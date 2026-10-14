@@ -32,9 +32,9 @@
   #months { display: flex; align-items: flex-end; gap: 3px; height: 48px; }
   #months .col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
   #months i { display: block; }
-  #months i.new { background: var(--new); border-radius: 2px 2px 0 0; }
+  #months i.new { background: var(--new); border-radius: 4px 4px 0 0; }
   #months i.work { background: var(--work); }
-  #months i.work:first-child { border-radius: 2px 2px 0 0; }
+  #months i.work:first-child { border-radius: 4px 4px 0 0; }
   #months .col.partial { opacity: .5; }
   #mticks span { transform: translateX(-50%); } #mticks span:last-child { transform: translateX(-100%); }
 </style>
@@ -45,14 +45,15 @@
 
 <div class="hud">
   <div id="addr" class="glass"></div>
-  <div class="corner"><button type="button" popovertarget="more">More</button></div>
+  <div class="corner"><button type="button" popovertarget="more"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M18 7h2M4 17h3M12 17h8"/><circle cx="15.5" cy="7" r="2.5"/><circle cx="9.5" cy="17" r="2.5"/></svg>More details</button></div>
 
   <section id="card" class="glass" aria-label="Construction near you">
+    <button class="handle" type="button" aria-expanded="false" aria-label="Layers and details"></button>
     <h1 class="kicker"><a href="/#construction" target="_top">Holy City Live</a> · Charleston construction near you</h1>
     <h2 id="headline">Looking for road work…</h2>
     <p id="detail"></p>
     <ul class="picks" id="closurePicks"></ul>
-    <p class="sub" id="biggestLbl" hidden>Biggest projects nearby</p>
+    <p class="sub extra" id="biggestLbl" hidden>Biggest projects nearby</p>
     <ul class="picks" id="biggest"></ul>
     <div class="key">
       <span><i class="sw line flooded"></i>Closed for flooding</span>
@@ -62,6 +63,7 @@
   </section>
 
   <div class="dock glass">
+    <p class="cap"><b>Permits, past year</b><span><i class="sw new"></i>New buildings</span><span><i class="sw work"></i>Other work</span></p>
     <div id="strip" role="img" aria-label="Permits near you by month, loading">
       <div id="months"></div>
       <div class="strip-ticks" id="mticks" aria-hidden="true"></div>

@@ -14,6 +14,10 @@
   --font: "Public Sans", "Helvetica Neue", Arial, sans-serif;
   --font-display: "Newsreader", Georgia, "Times New Roman", serif;
   --pipe: #e8eef5; --inlet: #9ad8ff;
+  /* soft surfaces: tinted fills instead of hairlines, round corners, one shadow; "on" is a filled accent pill */
+  --soft: color-mix(in srgb, var(--text) 8%, transparent); --edge: color-mix(in srgb, var(--text) 10%, transparent);
+  --shadow: 0 10px 40px rgb(0 0 0 / .35); --on: var(--accent); --on-text: var(--bg);
+  --radius: 24px;
 }
 :root[data-theme=light] {
   color-scheme: light;
@@ -23,4 +27,8 @@
   --control-bg: #fffefb; --button-bg: #efece4; --control-line: #767c84;
   --alert-bg: #fbeeec;
   --pipe: #3d4b5c; --inlet: var(--hcl-harbor); --closure: #c25e00;
+  --shadow: 0 10px 34px rgb(20 26 34 / .14);
 }
+/* Reduce animation: the OS setting, or the pick in Settings (theme.js sets data-motion) */
+@media (prefers-reduced-motion: reduce) { *, ::before, ::after { transition: none !important; animation: none !important; } }
+:root[data-motion=reduce] *, :root[data-motion=reduce] ::before, :root[data-motion=reduce] ::after { transition: none !important; animation: none !important; }
