@@ -14,6 +14,7 @@
 <meta property="og:image" content="https://www.holycity.live/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.css">
 <link rel="stylesheet" href="tokens.css">
 <script src="theme.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,27 +33,30 @@
   #months { display: flex; align-items: flex-end; gap: 3px; height: 48px; }
   #months .col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
   #months i { display: block; }
-  #months i.new { background: var(--new); border-radius: 2px 2px 0 0; }
+  #months i.new { background: var(--new); border-radius: 4px 4px 0 0; }
   #months i.work { background: var(--work); }
-  #months i.work:first-child { border-radius: 2px 2px 0 0; }
+  #months i.work:first-child { border-radius: 4px 4px 0 0; }
   #months .col.partial { opacity: .5; }
   #mticks span { transform: translateX(-50%); } #mticks span:last-child { transform: translateX(-100%); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.3/leaflet-maplibre-gl.js"></script>
 </head>
 <body>
 <div id="map"></div>
 
 <div class="hud">
   <div id="addr" class="glass"></div>
-  <div class="corner"><button type="button" popovertarget="more">More</button></div>
+  <div class="corner"><button type="button" popovertarget="more"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M18 7h2M4 17h3M12 17h8"/><circle cx="15.5" cy="7" r="2.5"/><circle cx="9.5" cy="17" r="2.5"/></svg>More details</button></div>
 
   <section id="card" class="glass" aria-label="Construction near you">
+    <button class="handle" type="button" aria-expanded="false" aria-label="Layers and details"></button>
     <h1 class="kicker"><a href="/#construction" target="_top">Holy City Live</a> · Charleston construction near you</h1>
     <h2 id="headline">Looking for road work…</h2>
     <p id="detail"></p>
     <ul class="picks" id="closurePicks"></ul>
-    <p class="sub" id="biggestLbl" hidden>Biggest projects nearby</p>
+    <p class="sub extra" id="biggestLbl" hidden>Biggest projects nearby</p>
     <ul class="picks" id="biggest"></ul>
     <div class="key">
       <span><i class="sw line flooded"></i>Closed for flooding</span>
@@ -62,6 +66,7 @@
   </section>
 
   <div class="dock glass">
+    <p class="cap"><b>Permits, past year</b><span><i class="sw new"></i>New buildings</span><span><i class="sw work"></i>Other work</span></p>
     <div id="strip" role="img" aria-label="Permits near you by month, loading">
       <div id="months"></div>
       <div class="strip-ticks" id="mticks" aria-hidden="true"></div>
@@ -113,7 +118,7 @@
 </aside>
 
 <script type="module">
-import { CITY, $, esc, money, day, near, query, makeMap, addressBox, bars, failed, cssVar, param, setParam } from './dash.js';
+import { CITY, $, esc, money, day, near, query, makeMap, pin, addressBox, bars, failed, cssVar, param, setParam } from './dash.js';
 import { titleCase } from './say.js';
 
 const PERMITS = `${CITY}/Applications/MapServer/20`, CASES = `${CITY}/Applications/MapServer/59`, CLOSURES = `${CITY}/RoadClosuresViewer/MapServer`;
@@ -126,6 +131,10 @@ const CATS = [
   ['Site, engineering & demolition', 'site work', p => /Engineering|Demolition|Grading|Right of Way|Encroach|Tree|Land Disturb/i.test(p.PERMIT_TYPE ?? '')],
   ['Other (rentals, signs, events, occupancy)', 'other permit', () => true],
 ];
+// Pin glyph per category, same order as CATS: building, house + addition, bolt, traffic cone, tag
+const GLYPHS = ['M6 21V5l6-2 6 2v16M10 8h.01M14 8h.01M10 12h.01M14 12h.01M10 21v-4h4v4', 'M3 11l9-7 9 7M5 10v10h14V10M12 12v6M9 15h6',
+  'M13 3 5 14h6l-1 7 8-11h-6z', 'M8 20 11 4h2l3 16M9.3 14h5.4M10.2 9.5h3.6M5 20h14', 'M3 12V3h9l9 9-9 9zM7.5 7.5h.01'];
+const PINS = 250, MONTH = 30 * 864e5; // ponytail: DOM pins capped for phones; the rest stay canvas dots
 const catOf = p => CATS.findIndex(([, , test]) => test(p));
 const dateOf = p => p.ISSUE_DATE ?? p.APPLICATION_DATE ?? 0;
 const short = ms => new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -175,9 +184,15 @@ function render() {
   const accent = cssVar('--accent');
   L.circle([here.lat, here.lon], { radius: data.r, color: accent, weight: 1, fillOpacity: 0.04, interactive: false }).addTo(layer);
   L.circleMarker([here.lat, here.lon], { radius: 6, color: '#fff', weight: 2, fillColor: accent, fillOpacity: 1 }).addTo(layer).bindTooltip(esc(here.label));
-  markers = permits.map(({ f, p, c }) => L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]],
-    { radius: p.VALUATION > 1e6 ? 7 : p.VALUATION > 1e5 ? 4.5 : 3, color: cssVar('--bg'), weight: 0.5, fillColor: colorOf(c), fillOpacity: 0.9 })
-    .bindPopup(`<b>${esc(p.PERMIT_ADDRESS_LINE1)}</b><br>${esc(p.PERMIT_TYPE)}, ${esc(p.WORK_CLASS)}<br>${esc(p.PERMIT_STATUS)}, issued ${day(p.ISSUE_DATE)}<br>Value ${money(p.VALUATION)}${p.SQUARE_FEET ? `, ${p.SQUARE_FEET.toLocaleString()} sq ft` : ''}<br><span class="sub">${esc((p.DESCRIPTION ?? '').slice(0, 220))}</span><br><span class="sub">#${esc(p.PERMIT_NUMBER)}</span>`).addTo(layer));
+  // new buildings and $100k+ jobs get glyph pins (pulsing if issued this month); small permits stay quiet dots
+  let pins = 0;
+  markers = permits.map(({ f, p, c }) => {
+    const ll = [f.geometry.coordinates[1], f.geometry.coordinates[0]], d = dateOf(p);
+    const m = (c === 0 || p.VALUATION > 1e5) && pins++ < PINS
+      ? pin(ll, { color: colorOf(c), glyph: GLYPHS[c], size: c === 0 ? 30 : p.VALUATION > 1e6 ? 26 : 22, fresh: d <= now && d >= now - MONTH, title: titleCase(p.PERMIT_ADDRESS_LINE1 ?? '') })
+      : L.circleMarker(ll, { radius: 3, color: cssVar('--bg'), weight: 0.5, fillColor: colorOf(c), fillOpacity: 0.9 });
+    return m.bindPopup(`<b>${esc(p.PERMIT_ADDRESS_LINE1)}</b><br>${esc(p.PERMIT_TYPE)}, ${esc(p.WORK_CLASS)}<br>${esc(p.PERMIT_STATUS)}, issued ${day(p.ISSUE_DATE)}<br>Value ${money(p.VALUATION)}${p.SQUARE_FEET ? `, ${p.SQUARE_FEET.toLocaleString()} sq ft` : ''}<br><span class="sub">${esc((p.DESCRIPTION ?? '').slice(0, 220))}</span><br><span class="sub">#${esc(p.PERMIT_NUMBER)}</span>`).addTo(layer);
+  });
   const closureList = [...live, ...soon];
   closureLayers = closureList.map(f => {
     const p = f.properties, flood = /FLOOD/i.test(p.REASON ?? '');

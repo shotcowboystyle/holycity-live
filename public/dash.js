@@ -44,16 +44,33 @@ export function metersBetween(a, b) { // haversine, [lat, lon]
 }
 
 // Full-screen map under the HUD: no zoom buttons (wheel, pinch, double-click and +/- keys zoom), attribution in the dock's #attrib.
-// Tiles are requested with CORS so the service worker can keep them for offline use (opaque responses aren't cached).
+// Base map: OpenFreeMap vector tiles (no key) drawn by MapLibre under Leaflet, repainted in the brand tokens for the current theme.
+// MapLibre fetches with CORS, so the service worker keeps tiles for offline use.
+const rgb = c => c.match(/\w\w/g).map(h => parseInt(h, 16)); // tokens are #rrggbb
+const mix = (a, b, t) => '#' + rgb(a).map((v, i) => Math.round(v + (rgb(b)[i] - v) * t).toString(16).padStart(2, '0')).join('');
 export function makeMap(el, center = PENINSULA, zoom = 14) {
-  const map = L.map(el, { preferCanvas: true, zoomControl: false }).setView(center, zoom);
+  const map = L.map(el, { preferCanvas: true, zoomControl: false, maxZoom: 19 }).setView(center, zoom);
   $('attrib').append(map.attributionControl.getContainer());
-  const esri = 'https://services.arcgisonline.com/arcgis/rest/services/Canvas', tone = lightTheme() ? 'Light' : 'Dark';
-  const attribution = 'Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors. Data: City of Charleston';
-  L.tileLayer(`${esri}/World_${tone}_Gray_Base/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19, maxNativeZoom: 16, attribution, crossOrigin: true }).addTo(map);
-  map.createPane('labels').style.zIndex = 650; map.getPane('labels').style.pointerEvents = 'none';
-  L.tileLayer(`${esri}/World_${tone}_Gray_Reference/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 19, maxNativeZoom: 16, pane: 'labels', crossOrigin: true }).addTo(map);
+  map.attributionControl.addAttribution('© <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © OpenMapTiles © OpenStreetMap contributors. Data: City of Charleston');
+  const gl = L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/positron', attributionControl: false }).addTo(map).getMaplibreMap();
+  gl.once('style.load', () => {
+    const bg = cssVar('--bg'), ink = cssVar('--text'), water = mix(bg, cssVar('--accent'), lightTheme() ? 0.22 : 0.3), green = mix(bg, cssVar('--good'), 0.1);
+    const paint = (id, prop, v) => gl.setPaintProperty(id, prop, v);
+    for (const { id, type } of gl.getStyle().layers) {
+      if (/shield/.test(id)) gl.setLayoutProperty(id, 'visibility', 'none'); // route-number boxes clutter the peninsula
+      else if (type === 'background') paint(id, 'background-color', bg);
+      else if (type === 'fill') paint(id, 'fill-color', /water/.test(id) ? water : /park|wood/.test(id) ? green : /building/.test(id) ? mix(bg, ink, 0.08) : mix(bg, ink, 0.02));
+      else if (type === 'line') paint(id, 'line-color', /water/.test(id) ? water : mix(bg, ink, /casing|boundary/.test(id) ? 0.2 : /major|motorway/.test(id) ? 0.16 : 0.1));
+      else if (type === 'symbol') { paint(id, 'text-color', /water/.test(id) ? mix(water, ink, 0.45) : mix(bg, ink, 0.62)); paint(id, 'text-halo-color', bg); }
+    }
+  });
   return map;
+}
+
+// Teardrop pin with a category glyph (24×24 stroke path, same style as .icon). size in px; `fresh` adds a pulsing ring.
+export function pin(latlng, { color, glyph, size = 26, fresh = false, title = '' }) {
+  const html = `<span class="pin${fresh ? ' fresh' : ''}" style="--pin:${color};--s:${size}px"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${glyph}"/></svg></span>`;
+  return L.marker(latlng, { title, riseOnHover: true, icon: L.divIcon({ html, className: 'pin-icon', iconSize: [size, size], iconAnchor: [size / 2, size], popupAnchor: [0, -size] }) });
 }
 
 // Address search shared by every tab: the picked place is stored in localStorage, and the other tabs
@@ -61,8 +78,10 @@ export function makeMap(el, center = PENINSULA, zoom = 14) {
 const KEY = 'chs-location';
 const LOCATOR = `${CITY_V1}/City_Address_Locator/GeocodeServer`;
 export function addressBox(el, onPick) {
-  el.innerHTML = `<div class="row"><input type="search" placeholder="Search an address" list="${el.id}-dl" aria-label="Address">
-    <button type="button" data-act="go">Go</button><button type="button" data-act="me" title="Use my location" aria-label="Use my location">◎</button></div>
+  el.innerHTML = `<div class="row"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
+    <input type="search" placeholder="Search an address" list="${el.id}-dl" aria-label="Address" enterkeyhint="search">
+    <button type="button" data-act="go">Go</button><button type="button" data-act="me" title="Use my location" aria-label="Use my location">
+    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4 4 11l6.5 2.5L13 20z"/></svg></button></div>
     <datalist id="${el.id}-dl"></datalist><div class="sub" data-msg></div>`;
   const input = el.querySelector('input'), dl = el.querySelector('datalist'), msg = el.querySelector('[data-msg]');
   let timer, keys = {};
@@ -105,6 +124,16 @@ export function addressBox(el, onPick) {
   else try { const saved = localStorage.getItem(KEY); if (saved) pick(JSON.parse(saved), false); } catch { /* storage blocked: start empty */ }
   return { pick };
 }
+
+// Phone bottom sheet (see dash.css): tap or swipe the handle to open layers and details, touch the map to tuck them away.
+// Every dashboard has a .hud with a .handle in its card; wide screens ignore .open.
+const hud = document.querySelector('.hud'), handle = hud.querySelector('.handle');
+const openSheet = on => { hud.classList.toggle('open', on); handle.setAttribute('aria-expanded', on); };
+let y0 = 0, swiped = false;
+handle.addEventListener('pointerdown', e => { y0 = e.clientY; swiped = false; handle.setPointerCapture(e.pointerId); });
+handle.addEventListener('pointerup', e => { if (Math.abs(e.clientY - y0) > 20) { swiped = true; openSheet(e.clientY < y0); } });
+handle.addEventListener('click', () => { if (!swiped) openSheet(!hud.classList.contains('open')); }); // a swipe already decided
+document.querySelector('#map, #view').addEventListener('pointerdown', () => openSheet(false));
 
 // Plain-language failure with a retry button; the technical detail stays in the tooltip
 export function failed(el, what, e, retry) {
