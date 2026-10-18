@@ -3,9 +3,9 @@
 // files are network-first, so a deploy shows up on the next online load and the cache only serves offline.
 const SHELL = 'hcl-shell', RUNTIME = 'hcl-runtime', RUNTIME_MAX = 3000;
 const PRECACHE = ['/', '/risk', '/construction', '/safety', '/services', '/about', '/settings',
-  '/tokens.css', '/dash.css', '/page.css', '/theme.js', '/dash.js', '/say.js', '/ride.js', '/app.js',
-  '/logo-reverse.svg', '/logo-color.svg', '/favicon.svg', '/favicon.ico', '/apple-touch-icon.png', '/icon-192.png', '/icon-512.png', '/site.webmanifest'];
-const CDN = ['https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js',
+  '/tokens.css', '/dash.css', '/page.css', '/theme.js', '/dash.js', '/say.js', '/ride.js', '/compute.js', '/app.js',
+  '/map-dark.webp', '/map-light.webp', '/logo-reverse.svg', '/logo-color.svg', '/favicon.svg', '/favicon.ico', '/apple-touch-icon.png', '/icon-192.png', '/icon-512.png', '/site.webmanifest'];
+const CDN = ['https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js',
   'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/MapControls.js',
   'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js',
   'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',

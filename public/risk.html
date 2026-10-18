@@ -52,6 +52,11 @@
   #heatKey .ramp { flex: 1; margin: 0; }
   .ramp.heat { background: linear-gradient(90deg, transparent, #f2c94c 8%, #f2994a 29%, #eb5757 55%, #b5179e 100%); } /* 76 → 125 °F */
 
+  /* stand-in until the 3D map starts (first touch, see app.js start3D): top-down basemap around the peninsula,
+     stitched from the same Esri tiles */
+  #view { background: #3f3f42 url(map-dark.webp) center / cover no-repeat; }
+  :root[data-theme=light] #view { background-color: #e7e7e8; background-image: url(map-light.webp); }
+
   #when { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
   canvas.chart { width: 100%; height: 120px; display: block; }
   .alert { border-left: 3px solid var(--major); padding: 4px 8px; margin: 4px 0; background: var(--alert-bg); border-radius: 4px; }
@@ -63,7 +68,7 @@
 </style>
 <script type="importmap">
 { "imports": {
-  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
 } }
 </script>

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { addressBox, cssVar, lightTheme, param, setParam } from './dash.js';
 import { hourLevel, verdict, spotAdvice } from './ride.js';
+import { relief } from './compute.js';
 
 // ---------- config ----------
 const BBOX = { w: -80.10, e: -79.78, s: 32.68, n: 32.88 };
@@ -48,7 +49,8 @@ const tAt = i => T0 + i * 3600;
 const coopsTime = s => Date.parse(s.replace(' ', 'T') + 'Z') / 1000;
 const fmt = (v, d = 1) => (v == null || Number.isNaN(v) ? '—' : v.toFixed(d));
 const whenText = t => new Date(t * 1000).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric' });
-const localHour = t => +new Date(t * 1000).toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' });
+const hourFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' }); // one formatter: toLocaleString builds one per call
+const localHour = t => +hourFmt.format(t * 1000);
 async function getJSON(url) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`${r.status} ${url.split('?')[0]}`);
@@ -65,6 +67,11 @@ function source(name, promise) {
   return promise.then(v => { sources[name] = 'ok'; renderSources(); return v ?? true; },
     e => { sources[name] = e.message; renderSources(); return false; });
 }
+// Heavy per-pixel work runs in compute.js on a worker thread; typed arrays travel both ways without copying.
+const computer = new Worker('compute.js', { type: 'module' }), pending = new Map();
+let jobId = 0;
+computer.onmessage = ({ data: { id, result, error } }) => { const [res, rej] = pending.get(id); pending.delete(id); error ? rej(new Error(error)) : res(result); };
+const compute = (task, args, transfer = []) => new Promise((res, rej) => { pending.set(++jobId, [res, rej]); computer.postMessage({ id: jobId, task, ...args }, transfer); });
 function renderSources() {
   $('sources').innerHTML = Object.entries(sources).map(([k, v]) =>
     `<li>${k}: <span class="${v === 'ok' ? 'ok' : v === '…' ? '' : 'bad'}">${v === 'ok' ? '✓' : v}</span></li>`).join('');
@@ -81,20 +88,23 @@ const aqiCat = a => a > 300 ? ['Hazardous', '#7e0023'] : a > 200 ? ['Very unheal
   : a > 100 ? ['Unhealthy for sensitive groups', '#ff7e00'] : a > 50 ? ['Moderate', '#ffff00'] : ['Good', '#00e400'];
 
 // ---------- three.js scene ----------
+// WebGL starts on the first touch, click, key or wheel (start3D, at the end): until then a flat picture of the basemap
+// stands in, so phones get the answer without paying for a 3D engine up front. Data, models and the scene load right away.
 const view = $('view');
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-view.appendChild(renderer.domElement);
+const canvasEl = document.createElement('canvas'); // MapControls and the inspector listen here before WebGL exists
+canvasEl.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;opacity:0'; // shown once the 3D basemap is in
+view.appendChild(canvasEl);
+let renderer = null;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(cssVar('--bg'));
 const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 400);
 camera.position.set(0, 16, 17);
-const controls = new MapControls(camera, renderer.domElement);
+const controls = new MapControls(camera, canvasEl);
 controls.enableDamping = true; controls.maxPolarAngle = 1.35; controls.minDistance = 0.8; controls.maxDistance = 70;
 // the map fills the screen on phones too (no page scroll), so MapControls' touch defaults apply
 if (matchMedia('(pointer: coarse)').matches) $('howto').textContent = 'One finger pans, two fingers zoom and rotate, tap to inspect.';
 function resize() {
-  renderer.setSize(view.clientWidth, view.clientHeight);
+  renderer?.setSize(view.clientWidth, view.clientHeight);
   camera.aspect = view.clientWidth / view.clientHeight; camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize); resize();
@@ -186,8 +196,7 @@ const material = new THREE.ShaderMaterial({
 });
 
 const SEGX = NX * 64, SEGY = NY * 64;
-const geo = new THREE.PlaneGeometry(SW, SD, SEGX, SEGY);
-geo.rotateX(-Math.PI / 2);
+let geo = new THREE.PlaneGeometry(SW, SD).rotateX(-Math.PI / 2); // flat stand-in; the full mesh comes from compute.js with 3DEP
 const terrain = new THREE.Mesh(geo, material);
 scene.add(terrain);
 const marker = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({ color: 0xffffff }));
@@ -203,16 +212,20 @@ function elevAt(u, v) {
   const y = Math.min(PH - 1, Math.max(0, Math.round((1 - v) * (PH - 1))));
   return heights[y * PW + x];
 }
+function setBounds(top) { // the mesh is a known box: skips three.js scanning ~220k vertices
+  geo.boundingBox = new THREE.Box3(new THREE.Vector3(-SW / 2, 0, -SD / 2), new THREE.Vector3(SW / 2, top, SD / 2));
+  geo.boundingSphere = geo.boundingBox.getBoundingSphere(new THREE.Sphere());
+}
 function applyExag() {
-  const pos = geo.attributes.position, elev = geo.attributes.elev.array;
-  for (let i = 0; i < pos.count; i++) pos.setY(i, disp(elev[i]));
-  pos.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingSphere(); geo.computeBoundingBox();
+  const { position, normal, elev } = geo.attributes;
+  setBounds(relief(elev.array, exag, SEGX, SEGY, SW, SD, position.array, normal.array));
+  position.needsUpdate = normal.needsUpdate = true;
   buildRoads(); buildStorm();
 }
 
 async function mosaic(z, ...urlFns) { // same extent at zoom z >= Z; later url functions draw on top (labels over base)
   const k = 2 ** (z - Z), c = document.createElement('canvas'); c.width = PW * k; c.height = PH * k;
-  const g = c.getContext('2d', { willReadFrequently: true });
+  const g = c.getContext('2d'); // never read back: keep it GPU-backed so the texture upload stays cheap
   const jobs = [];
   for (let x = X0 * k; x < (X1 + 1) * k; x++) for (let y = Y0 * k; y < (Y1 + 1) * k; y++)
     // a tile that fails twice is left blank: one gap beats losing the whole basemap to a transient error among hundreds
@@ -226,24 +239,21 @@ async function mosaic(z, ...urlFns) { // same extent at zoom z >= Z; later url f
 const S = { i: BACK, slrFt: 0, surgeFt: 0, tide: null, nwps: null, stofs: null, wl: null, wx: null, grid: null, aq: null, slr: null, uhi: {}, closures: [], rain: null };
 
 // ---------- loaders ----------
-// USGS 3DEP straight from the source ImageServer. (AWS Terrarium tiles were tried first: their z13/z14 overviews
-// hold integer/wrong values on the peninsula, e.g. Calhoun St 15 m vs 3.4 m in 3DEP.) Server render takes ~10 s.
-const DEM = 'https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer';
+// USGS 3DEP ImageServer export, through /api/dem (src/worker.js) so the edge keeps it: the server render takes ~10 s.
+// (AWS Terrarium tiles were tried first: their z13/z14 overviews hold integer/wrong values on the peninsula,
+// e.g. Calhoun St 15 m vs 3.4 m in 3DEP.)
 const terrainP = source('USGS 3DEP elevation', (async () => {
-  const r = await fetch(`${DEM}/exportImage?bbox=${EXTENT_3857}&bboxSR=3857&imageSR=3857&size=${PW},${PH}&format=bsq&pixelType=F32&interpolation=RSP_BilinearInterpolation&f=image`);
-  if (!r.ok) throw new Error(`${r.status} 3DEP export`);
-  const buf = await r.arrayBuffer();
-  if (buf.byteLength < PW * PH * 4) throw new Error('3DEP export truncated');
-  heights = new Float32Array(buf, 0, PW * PH).slice(); // little-endian floats, rows north→south; a 1-bit mask band follows
-  const half = new Uint16Array(PW * PH); // per-pixel elevation for the fragment shader (rows flipped: v=0 is south)
-  for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) half[(PH - 1 - y) * PW + x] = THREE.DataUtils.toHalfFloat(heights[y * PW + x]);
-  const ht = new THREE.DataTexture(half, PW, PH, THREE.RedFormat, THREE.HalfFloatType);
+  const url = `${location.origin}/api/dem?bbox=${EXTENT_3857}&bboxSR=3857&imageSR=3857&size=${PW},${PH}&format=bsq&pixelType=F32&interpolation=RSP_BilinearInterpolation&f=image`;
+  const shownExag = exag, r = await compute('dem', { url, PW, PH, SEGX, SEGY, SW, SD, exag });
+  heights = r.heights; // rows north→south
+  const ht = new THREE.DataTexture(r.half, PW, PH, THREE.RedFormat, THREE.HalfFloatType); // per-pixel elevation for the fragment shader
   ht.magFilter = ht.minFilter = THREE.LinearFilter; ht.unpackAlignment = 2; ht.needsUpdate = true;
   uniforms.uHeight.value = ht;
-  const uv = geo.attributes.uv, elev = new Float32Array(uv.count);
-  for (let i = 0; i < uv.count; i++) elev[i] = elevAt(uv.getX(i), uv.getY(i));
-  geo.setAttribute('elev', new THREE.BufferAttribute(elev, 1));
-  applyExag();
+  geo.dispose(); geo = new THREE.BufferGeometry();
+  for (const [k, n] of [['position', 3], ['normal', 3], ['uv', 2], ['elev', 1]]) geo.setAttribute(k, new THREE.BufferAttribute(r[k], n));
+  geo.setIndex(new THREE.BufferAttribute(r.index, 1));
+  terrain.geometry = geo; setBounds(r.top[0]);
+  if (exag !== shownExag) applyExag(); else { buildRoads(); buildStorm(); } // the slider moved while 3DEP loaded
   $('loading').style.display = 'none';
 })());
 terrainP.then(ok => { if (!ok) { $('loading').textContent = "Street elevations didn't load, so flood depths are unavailable. See More, Data sources."; update(); } });
@@ -257,19 +267,27 @@ const BASEMAPS = { // [base, labels]
 };
 const baseTex = {};
 const basemapName = () => $('lSat').checked ? 'satellite' : lightTheme() ? 'light' : 'dark';
-function setBasemap() { // z14: street-level labels for the zoomed-in peninsula view. First call: lSat's restored-state change event below
+const ANISO = 16; // three.js clamps it to what the GPU supports
+function setBasemap() { // z14: street-level labels for the zoomed-in peninsula view. Hundreds of tiles, so only once 3D is on
+  if (!renderer) return;
   const name = basemapName();
   baseTex[name] ??= source(`Esri ${name} basemap`, mosaic(Z + 1, ...BASEMAPS[name]).then(c => {
     const t = new THREE.CanvasTexture(c);
-    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    t.anisotropy = ANISO;
     return t;
   }));
-  baseTex[name].then(t => { if (t && basemapName() === name) uniforms.uBase.value = t; });
+  baseTex[name].then(t => {
+    if (!t || basemapName() !== name) return;
+    uniforms.uBase.value = t;
+    canvasEl.style.opacity = ''; // the 3D map covers the stand-in picture
+    if (heights) $('loading').style.display = 'none';
+  });
 }
 
-source('FEMA NFHL flood zones', new Promise((res, rej) => new THREE.TextureLoader().load(
-  `${FEMA}/export?bbox=${EXTENT_3857}&bboxSR=3857&imageSR=3857&size=2048,${Math.round(2048 * PH / PW)}&dpi=40&layers=show:28&format=png32&transparent=true&f=image`,
-  res, undefined, () => rej(new Error('export failed')))).then(t => { uniforms.uFema.value = t; }));
+function loadFema() {
+  lazy.fema ??= source('FEMA NFHL flood zones', loadTex(`${FEMA}/export?bbox=${EXTENT_3857}&bboxSR=3857&imageSR=3857&size=2048,${Math.round(2048 * PH / PW)}&dpi=40&layers=show:28&format=png32&transparent=true&f=image`)
+    .then(t => { uniforms.uFema.value = t; }));
+}
 
 const tideP = source('NOAA CO-OPS tides, datums, flood stages', (async () => {
   const q = `station=${STATION}&datum=MLLW&units=english&time_zone=gmt&format=json&application=holycity-live`;
@@ -395,7 +413,7 @@ source('NWS active alerts', getJSON(`https://api.weather.gov/alerts/active?point
   Object.assign($('alertPill'), { hidden: !events.length, textContent: events.join(', ') });
 })).then(ok => { if (!ok) $('alerts').textContent = 'Unavailable (see Data sources).'; });
 
-// City of Charleston heat-island temperature models: decode rendered raster back to °F via its legend ramp.
+// City of Charleston heat-island temperature models: decode rendered raster back to °F via its legend ramp (in compute.js).
 async function loadUhi(layer, legend) {
   const entry = legend.layers.find(l => l.layerId === layer).legend[0];
   const [hi, lo] = entry.label.match(/[\d.]+/g).map(Number).sort((a, b) => b - a);
@@ -404,25 +422,7 @@ async function loadUhi(layer, legend) {
   const lg = lc.getContext('2d'); lg.drawImage(leg, 0, 0);
   const ld = lg.getImageData(leg.width >> 1, 0, 1, leg.height).data; // top = hottest
   const W = 1024, H = Math.round(W * PH / PW);
-  const img = await loadImg(`${CITY}/Heat/MapServer/export?bbox=${EXTENT_3857}&bboxSR=3857&imageSR=3857&size=${W},${H}&layers=show:${layer}&format=png32&transparent=true&f=image`);
-  const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
-  const d = g.getImageData(0, 0, W, H).data, temp = new Float32Array(W * H).fill(NaN);
-  let sum = 0, n = 0;
-  for (let p = 0; p < W * H; p++) {
-    if (d[p * 4 + 3] < 200) continue;
-    let best = 0, bd = Infinity;
-    for (let k = 0; k < leg.height; k++) {
-      const dr = d[p * 4] - ld[k * 4], dg = d[p * 4 + 1] - ld[k * 4 + 1], db = d[p * 4 + 2] - ld[k * 4 + 2];
-      const dd = dr * dr + dg * dg + db * db; if (dd < bd) { bd = dd; best = k; }
-    }
-    temp[p] = hi - best / (leg.height - 1) * (hi - lo); sum += temp[p]; n++;
-  }
-  const mean = sum / n, out = new Uint8Array(W * H * 4), anom = new Float32Array(W * H);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const p = y * W + x, a = Number.isNaN(temp[p]) ? 0 : temp[p] - mean, q = ((H - 1 - y) * W + x) * 4; // flip rows: texture v=0 is south
-    anom[p] = a; out[q] = Math.max(0, Math.min(255, Math.round(128 + a * 16))); out[q + 3] = 255;
-  }
+  const { out, anom } = await compute('heat', { url: `${CITY}/Heat/MapServer/export?bbox=${EXTENT_3857}&bboxSR=3857&imageSR=3857&size=${W},${H}&layers=show:${layer}&format=png32&transparent=true&f=image`, W, H, ld, hi, lo });
   const tex = new THREE.DataTexture(out, W, H); tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
   return { tex, anom, W, H };
 }
@@ -491,7 +491,7 @@ function buildStorm() {
   addLines(storm, seg, cssVar('--pipe'));
   addPoints(storm, S.storm.inlets.flatMap(f => drape(f.geometry.coordinates, 0.01)), cssVar('--inlet'), 2);
 }
-const loadTex = url => new Promise((res, rej) => new THREE.TextureLoader().load(url, t => { t.anisotropy = renderer.capabilities.getMaxAnisotropy(); res(t); }, undefined, () => rej(new Error('export failed'))));
+const loadTex = url => new Promise((res, rej) => new THREE.TextureLoader().load(url, t => { t.anisotropy = ANISO; res(t); }, undefined, () => rej(new Error('export failed'))));
 const cityExport = (svc, layer, w) => { // dynamicLayers drops the City's baked-in value labels
   const dl = encodeURIComponent(JSON.stringify([{ id: +layer, source: { type: 'mapLayer', mapLayerId: +layer }, drawingInfo: { showLabels: false } }]));
   return `${svc}/export?bbox=${EXTENT_3857}&bboxSR=3857&imageSR=3857&size=${w},${Math.round(w * PH / PW)}&dynamicLayers=${dl}&format=png32&transparent=true&f=image`;
@@ -509,75 +509,17 @@ const scenarioFt = () => S.slrFt + S.surgeFt;
 //    rises from MHHW to minor flood stage (gravity outfalls submerge), so high tide + rain compounds.
 // 3. Each depression receives excess × its area × a runoff-concentration factor and fills bottom-up to its spill level.
 // ponytail: overflow from a full depression doesn't cascade downstream; add flow routing if that matters.
-class MinHeap {
-  constructor(cap) { this.k = new Float32Array(cap); this.v = new Int32Array(cap); this.n = 0; }
-  push(v, k) {
-    let i = this.n++;
-    while (i > 0) { const p = (i - 1) >> 1; if (this.k[p] <= k) break; this.k[i] = this.k[p]; this.v[i] = this.v[p]; i = p; }
-    this.k[i] = k; this.v[i] = v;
-  }
-  pop() {
-    const top = this.v[0], k = this.k[--this.n], v = this.v[this.n];
-    let i = 0;
-    for (;;) {
-      let c = 2 * i + 1; if (c >= this.n) break;
-      if (c + 1 < this.n && this.k[c + 1] < this.k[c]) c++;
-      if (this.k[c] >= k) break;
-      this.k[i] = this.k[c]; this.v[i] = this.v[c]; i = c;
-    }
-    this.k[i] = k; this.v[i] = v;
-    return top;
-  }
-}
-function fillDepressions(elev, W, H, outletBelow) {
-  const n = W * H, filled = Float32Array.from(elev), closed = new Uint8Array(n), heap = new MinHeap(n), pit = new Int32Array(n);
-  for (let i = 0; i < n; i++) {
-    const x = i % W, y = (i / W) | 0;
-    if (x === 0 || y === 0 || x === W - 1 || y === H - 1 || elev[i] < outletBelow) { closed[i] = 1; heap.push(i, elev[i]); }
-  }
-  let ph = 0, pt = 0;
-  while (pt < ph || heap.n) {
-    const c = pt < ph ? pit[pt++] : heap.pop(), cx = c % W, cy = (c / W) | 0, fc = filled[c];
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const x = cx + dx, y = cy + dy;
-      if ((!dx && !dy) || x < 0 || y < 0 || x >= W || y >= H) continue;
-      const nb = y * W + x; if (closed[nb]) continue;
-      closed[nb] = 1;
-      if (filled[nb] <= fc) { filled[nb] = fc; pit[ph++] = nb; } else heap.push(nb, filled[nb]);
-    }
-  }
-  return filled;
-}
-function buildRain() {
-  const W = PW, H = PH, elev = heights, filled = fillDepressions(elev, W, H, uniforms.uMhhw.value);
-  const seen = new Uint8Array(W * H), cells = new Int32Array(W * H), comps = [], q = new Int32Array(W * H);
-  let used = 0;
-  const g = uniforms.uGrid.value;
-  for (let s = 0; s < W * H; s++) {
-    if (seen[s] || filled[s] - elev[s] < 0.005) continue;
-    const start = used; let qh = 0, qt = 0, sx = 0, sy = 0;
-    q[qt++] = s; seen[s] = 1;
-    while (qh < qt) { // flood-fill one depression (8-connected)
-      const c = q[qh++], cx = c % W, cy = (c / W) | 0; cells[used++] = c; sx += cx; sy += cy;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-        const x = cx + dx, y = cy + dy; if (x < 0 || y < 0 || x >= W || y >= H) continue;
-        const nb = y * W + x; if (!seen[nb] && filled[nb] - elev[nb] >= 0.005) { seen[nb] = 1; q[qt++] = nb; }
-      }
-    }
-    const n = used - start, sorted = new Float32Array(n);
-    for (let k = 0; k < n; k++) sorted[k] = elev[cells[start + k]];
-    sorted.sort();
-    const prefix = new Float64Array(n + 1); for (let k = 0; k < n; k++) prefix[k + 1] = prefix[k] + sorted[k];
-    const u = sx / n / (W - 1), v = 1 - sy / n / (H - 1); // centroid → grid cell for rainfall
-    const px = Math.min(1, Math.max(0, (u - g.x) / (g.z - g.x))) * (GNX - 1), py = Math.min(1, Math.max(0, (v - g.y) / (g.w - g.y))) * (GNY - 1);
-    comps.push({ start, n, sorted, prefix, spill: filled[cells[start]], gx: px, gy: py });
-  }
-  const depth = new Uint8Array(W * H);
-  const tex = new THREE.DataTexture(depth, W, H, THREE.RedFormat);
-  tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.unpackAlignment = 1; tex.needsUpdate = true;
-  uniforms.uRain.value = tex;
-  S.rain = { cells: cells.subarray(0, used), comps, depth, tex, area: 0 };
-  update();
+function buildRain() { // the DEM fill runs in compute.js; a failure shows in the Data sources panel
+  const W = PW, H = PH, g = uniforms.uGrid.value; // the worker kept its own copy of the 3DEP heights
+  source('Rain ponding model', compute('rain', { outletBelow: uniforms.uMhhw.value, g: { x: g.x, y: g.y, z: g.z, w: g.w }, GNX, GNY })
+    .then(comps => { // flat arrays, see findDepressions in compute.js
+      const depth = new Uint8Array(W * H);
+      const tex = new THREE.DataTexture(depth, W, H, THREE.RedFormat);
+      tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.unpackAlignment = 1; tex.needsUpdate = true;
+      uniforms.uRain.value = tex;
+      S.rain = { ...comps, depth, tex, area: 0 };
+      update();
+    }));
 }
 function excessSeries() { // excess (undrained) rain storage for every timeline hour, inches, per grid point
   const drain = +$('drain').value, T = S.tide, cur = new Float64Array(GNX * GNY), out = [];
@@ -588,30 +530,30 @@ function excessSeries() { // excess (undrained) rain storage for every timeline 
   }
   return out;
 }
-function compLevel(c, ex, conc) { // rain level (m) in depression c for excess storage ex; null when it holds no water
-  const ax = Math.floor(c.gx), ay = Math.floor(c.gy), bx = Math.min(ax + 1, GNX - 1), by = Math.min(ay + 1, GNY - 1), fx = c.gx - ax, fy = c.gy - ay;
+function compLevel(R, c, ex, conc) { // rain level (m) in depression c for excess storage ex; null when it holds no water
+  const ax = Math.floor(R.gx[c]), ay = Math.floor(R.gy[c]), bx = Math.min(ax + 1, GNX - 1), by = Math.min(ay + 1, GNY - 1), fx = R.gx[c] - ax, fy = R.gy[c] - ay;
   const s = (ex[ay * GNX + ax] * (1 - fx) + ex[ay * GNX + bx] * fx) * (1 - fy) + (ex[by * GNX + ax] * (1 - fx) + ex[by * GNX + bx] * fx) * fy;
-  const V = s * 0.0254 * conc * c.n; if (V <= 0) return null; // m × cells
-  const { sorted: e, prefix: P, n } = c;
-  if (V >= n * c.spill - P[n]) return c.spill;
+  const n = R.n[c], V = s * 0.0254 * conc * n; if (V <= 0) return null; // m × cells
+  const e = R.start[c] - 1, P = R.start[c] + c, spill = R.spill[c]; // e + k → k-th sorted elevation (1-based), P + k → sum of the first k
+  if (V >= n * spill - R.prefix[P + n]) return spill;
   let lo = 1, hi = n; // largest k with k·e[k−1] − P[k] ≤ V, then level = (V + P[k]) / k
-  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (m * e[m - 1] - P[m] <= V) lo = m; else hi = m - 1; }
-  return (V + P[lo]) / lo;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (m * R.sorted[e + m] - R.prefix[P + m] <= V) lo = m; else hi = m - 1; }
+  return (V + R.prefix[P + lo]) / lo;
 }
-const countBelow = (a, x) => { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < x) lo = m + 1; else hi = m; } return lo; };
+const countBelow = (a, lo, hi, x) => { const s = lo; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < x) lo = m + 1; else hi = m; } return lo - s; };
 function rainKm2(ex) { // land ponded ≥ 5 cm (what the map shows), straight from each depression's sorted elevations
   if (!ex.some(v => v > 0)) return 0;
-  const conc = +$('conc').value; let wet = 0;
-  for (const c of S.rain.comps) { const L = compLevel(c, ex, conc); if (L != null) wet += countBelow(c.sorted, L - 0.05); }
+  const R = S.rain, conc = +$('conc').value; let wet = 0;
+  for (let c = 0; c < R.n.length; c++) { const L = compLevel(R, c, ex, conc); if (L != null) wet += countBelow(R.sorted, R.start[c], R.start[c] + R.n[c], L - 0.05); }
   return wet * (SW / PW) * (SD / PH);
 }
 function updateRain() {
   const R = S.rain; if (!R || !S.grid) return;
   const ex = S.excess[S.i], conc = +$('conc').value, water = uniforms.uWater.value;
   R.depth.fill(0); let wet = 0;
-  for (const c of R.comps) {
-    const L = compLevel(c, ex, conc); if (L == null) continue;
-    for (let k = c.start; k < c.start + c.n; k++) {
+  for (let c = 0; c < R.n.length; c++) {
+    const L = compLevel(R, c, ex, conc); if (L == null) continue;
+    for (let k = R.start[c]; k < R.start[c] + R.n[c]; k++) {
       const cell = R.cells[k], d = L - heights[cell]; if (d <= 0) continue;
       const x = cell % PW, y = (cell / PW) | 0;
       R.depth[(PH - 1 - y) * PW + x] = Math.min(255, Math.round(d * 100)); // texture rows run south → north
@@ -626,7 +568,7 @@ const rainDepthAt = (u, v) => { // m
   const x = Math.min(PW - 1, Math.max(0, Math.round(u * (PW - 1)))), y = Math.min(PH - 1, Math.max(0, Math.round((1 - v) * (PH - 1))));
   return S.rain.depth[(PH - 1 - y) * PW + x] / 100;
 };
-Promise.all([terrainP, tideP]).then(() => { if (heights) setTimeout(buildRain); });
+Promise.all([terrainP, tideP]).then(() => { if (heights) buildRain(); });
 function uhiFor(t) { const h = localHour(t); return S.uhi[h >= 6 && h < 11 ? 'morning' : h >= 11 && h < 18 ? 'afternoon' : 'evening']; }
 function gridVal(t, key, u, v) { // JS twin of shader gridAt
   const k = S.grid?.idx.get(t); if (k == null) return null;
@@ -647,8 +589,9 @@ function updateSlr() {
 // ---------- ride check: 48-hour strip + plain-language verdict ----------
 const STRIP = 48; // hours shown in the strip, starting now
 const TZ = 'America/New_York';
-const ymd = t => new Date(t * 1000).toLocaleDateString('en-CA', { timeZone: TZ });
-const weekday = t => new Date(t * 1000).toLocaleDateString('en-US', { timeZone: TZ, weekday: 'short' });
+const ymdFmt = new Intl.DateTimeFormat('en-CA', { timeZone: TZ }), weekdayFmt = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' });
+const ymd = t => ymdFmt.format(t * 1000);
+const weekday = t => weekdayFmt.format(t * 1000);
 const clock = t => { const h = localHour(t); return h === 12 ? 'noon' : `${h % 12 || 12} ${h < 12 ? 'am' : 'pm'}`; };
 const when = t => { // "4 pm today", "8 pm tonight", "7 am tomorrow", "noon Thu"
   const d = ymd(t), now = tAt(BACK);
@@ -803,10 +746,10 @@ function drawChart() {
 
 // ---------- inspector ----------
 let lastPick = null, down = null, femaSeq = 0;
-renderer.domElement.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
-renderer.domElement.addEventListener('pointerup', e => {
+canvasEl.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
+canvasEl.addEventListener('pointerup', e => {
   if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5 || !heights) return;
-  const r = renderer.domElement.getBoundingClientRect(), ray = new THREE.Raycaster();
+  const r = canvasEl.getBoundingClientRect(), ray = new THREE.Raycaster();
   ray.setFromCamera(new THREE.Vector2((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1), camera);
   const hit = ray.intersectObject(terrain)[0]; if (!hit) return;
   marker.position.copy(hit.point); marker.visible = true;
@@ -908,7 +851,7 @@ strip.addEventListener('keydown', e => {
 $('more').addEventListener('toggle', () => update(false), true);
 addEventListener('keydown', e => { if (e.key === 'Escape' && $('more').matches(':popover-open')) $('more').hidePopover(); });
 $('lHeat').onchange = update;
-$('lFema').onchange = e => { uniforms.uFemaOn.value = e.target.checked; };
+$('lFema').onchange = e => { uniforms.uFemaOn.value = e.target.checked; if (e.target.checked) loadFema(); };
 $('lRoads').onchange = e => { roads.visible = e.target.checked; };
 $('lStorm').onchange = e => { storm.visible = e.target.checked; if (e.target.checked) loadStorm(); };
 $('lCanopy').onchange = e => { uniforms.uCanopyOn.value = e.target.checked; if (e.target.checked) loadCanopy(); };
@@ -947,7 +890,19 @@ $('addr').querySelector('input').placeholder = 'Where are you riding to?';
 let still = matchMedia('(prefers-reduced-motion: reduce)').matches; // no water ripple
 try { still ||= localStorage.getItem('motion') === 'reduce'; } catch { /* storage blocked: follow the OS */ } // Settings override
 const frame = ms => { if (!still) uniforms.uTime.value = ms / 1000; controls.update(); renderer.render(scene, camera); };
-renderer.setAnimationLoop(frame);
+let tabActive = true;
 // Dashboard shell (index.html) says when this tab is hidden: stop rendering so the GPU idles.
-addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'tab') renderer.setAnimationLoop(e.data.active ? frame : null); });
+addEventListener('message', e => {
+  if (e.origin !== location.origin || e.data?.type !== 'tab') return;
+  tabActive = e.data.active; renderer?.setAnimationLoop(tabActive ? frame : null);
+});
+function start3D() { // until now #view shows its stand-in picture (risk.html CSS)
+  if (renderer) return;
+  renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvasEl });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  if (heights) Object.assign($('loading'), { textContent: 'Loading the 3D map…' }).style.display = ''; // else 3DEP's note is up
+  resize(); setBasemap();
+  renderer.setAnimationLoop(tabActive ? frame : null);
+}
+for (const type of ['pointerdown', 'keydown', 'wheel']) addEventListener(type, start3D, { once: true, passive: true });
 update();
