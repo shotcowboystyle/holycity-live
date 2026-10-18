@@ -14,6 +14,11 @@ Live civic dashboards for Charleston, SC — [holycity.live](https://holycity.li
 Built for phones first: a bottom tab bar, and on each dashboard one bottom sheet that shows only the answer and its strip
 until you tap or swipe its handle for layers and details; touching the map tucks it away again.
 
+The Flood & Heat map starts its 3D engine on the first touch, click, key or wheel; until then a top-down basemap picture
+(`public/map-dark.webp` / `map-light.webp`, stitched once from the same Esri tiles) stands in, while the data and the ride
+check load as usual. Per-pixel work (3DEP decode, terrain mesh, rain depressions, heat rasters) runs in a Web Worker
+(`public/compute.js`).
+
 Installable as a PWA (manifest with home-screen shortcuts to each dashboard; iOS shows no shortcuts) and works offline:
 `public/sw.js` keeps the app shell, CDN libraries and fonts, plus the last data and tiles each dashboard loaded.
 
