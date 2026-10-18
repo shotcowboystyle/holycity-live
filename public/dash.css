@@ -21,10 +21,11 @@ a { color: var(--accent); }
   grid-template-columns: minmax(0, 380px) 1fr auto; grid-template-rows: auto auto 1fr auto;
   grid-template-areas: "search . corner" "card . ." ". . ." "dock dock dock"; }
 .hud > * { pointer-events: auto; }
-/* the card's surface; when there's something to warn about it takes on a faint tint of it (pages set --level1 / --level2) */
+/* the card's surface; when there's something to warn about its edge takes on that color (pages set --level1 / --level2).
+   Edge, not fill: orange or red mixed into the dark glass turns muddy brown. */
 .hud { --sheet: var(--glass); }
-.hud:has(#card[data-level="1"]) { --sheet: color-mix(in srgb, var(--level1, var(--warn)) 12%, var(--glass)); }
-.hud:has(#card[data-level="2"]) { --sheet: color-mix(in srgb, var(--level2, var(--bad)) 15%, var(--glass)); }
+#card[data-level="1"] { border-color: color-mix(in srgb, var(--level1, var(--warn)) 60%, transparent); }
+#card[data-level="2"] { border-color: color-mix(in srgb, var(--level2, var(--bad)) 60%, transparent); }
 
 /* Search: one pill. The border stays at 3:1 so the field reads as a field. */
 #addr { grid-area: search; border-radius: 28px; padding: 5px; border-color: var(--control-line); }
@@ -35,6 +36,7 @@ a { color: var(--accent); }
 #addr button { min-height: 44px; }
 #addr [data-act=go] { background: var(--on); color: var(--on-text); }
 #addr [data-act=me] { display: grid; place-items: center; width: 44px; padding: 0; }
+#addr [data-act=me] .icon { margin: 0; translate: -1px 1px; } /* drop the search icon's side margin; nudge the arrow to its optical center */
 #addr [data-msg] { color: var(--muted); font-size: 13px; padding: 0 14px 4px; }
 #addr [data-msg]:empty { display: none; }
 
@@ -135,6 +137,13 @@ a { color: var(--accent); }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--card); color: var(--text); border: 1px solid var(--edge); box-shadow: var(--shadow); }
 .leaflet-popup-content { margin: 12px 14px; font-size: 13px; }
 .leaflet-tooltip { font: 13px/1.4 var(--font); border-radius: 10px; }
+/* pin() in dash.js: a teardrop (a rotated rounded square) whose tip sits on the point, glyph upright inside */
+.pin-icon { background: none; border: 0; }
+.pin { position: relative; display: grid; place-items: center; width: var(--s); height: var(--s); background: var(--pin);
+  border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 0 0 1.5px var(--bg), 0 3px 8px rgb(0 0 0 / .35); }
+.pin svg { width: 58%; height: 58%; transform: rotate(45deg); fill: none; stroke: var(--bg); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.pin.fresh::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 0 0 0 var(--pin); animation: pin-pulse 2s ease-out infinite; }
+@keyframes pin-pulse { to { box-shadow: 0 0 0 calc(var(--s) * .45) transparent; } }
 
 /* Page name above the live headline: a stable h1 for search and screen readers, and a way home when opened on its own */
 .kicker { font: 600 11px/1.3 var(--font); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px; }

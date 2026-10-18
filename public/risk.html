@@ -28,7 +28,7 @@
     --level1: var(--sign); --level2: var(--stop);
   }
   :root[data-theme=light] { --sign: #b07d00; --dry: #aab4c0; --closure: #1f2328; }
-  #alertPill { display: inline-block; margin: 0 0 8px; padding: 2px 10px; border: 1px solid var(--stop); border-radius: 99px; font-size: 12px; font-weight: 600; }
+  #card #alertPill { display: inline-block; margin: 0 0 12px; /* #card: outranks dash.css's #card p margin */ padding: 2px 10px; border: 1px solid var(--stop); border-radius: 99px; font-size: 12px; font-weight: 600; }
   #weather { color: var(--muted); font-size: 12px; }
   #spot { padding: 10px 14px; background: var(--soft); border-radius: 16px; margin-top: 12px !important; }
   .sw.wet { background: var(--sign); } .sw.stop { background: var(--stop); }
