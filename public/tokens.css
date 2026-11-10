@@ -29,6 +29,7 @@
   --pipe: #3d4b5c; --inlet: var(--hcl-harbor); --closure: #c25e00;
   --shadow: 0 10px 34px rgb(20 26 34 / .14);
 }
-/* Reduce animation: the OS setting, or the pick in Settings (theme.js sets data-motion) */
-@media (prefers-reduced-motion: reduce) { *, ::before, ::after { transition: none !important; animation: none !important; } }
-:root[data-motion=reduce] *, :root[data-motion=reduce] ::before, :root[data-motion=reduce] ::after { transition: none !important; animation: none !important; }
+/* Reduce animation: the OS setting, or the pick in Settings (theme.js sets data-motion).
+   Movement goes; fades stay, so panels cross-fade instead of snapping. */
+@media (prefers-reduced-motion: reduce) { *, ::before, ::after { transition-property: opacity, display, overlay !important; animation: none !important; } }
+:root[data-motion=reduce] *, :root[data-motion=reduce] ::before, :root[data-motion=reduce] ::after { transition-property: opacity, display, overlay !important; animation: none !important; }
