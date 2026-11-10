@@ -8,6 +8,7 @@ Live civic dashboards for Charleston, SC — [holycity.live](https://holycity.li
 | **Construction Near Me** | What's closed and what's being built around an address: closures first, the biggest projects, a 12-month permit strip, and ¼ / ½ / 1 mile. Under **More details**: permit categories, full lists, code cases, older permits |
 | **Public Safety Trends** | Police activity in your neighborhood in plain words (per resident, compared with the rest of the city) and the citywide trend, over a 24-month strip. Under **More details**: equity shading, charges, patrol teams |
 | **Service Days** | When the trash goes out, yard waste and street sweeping, on a two-week calendar strip. Under **More details**: fire station, representatives, zoning, flood zone, nearby parks |
+| **Transit** | Every CARTA bus route and stop, the next buses at the stop nearest an address (live predictions when the Swiftly key is set), live bus positions, holiday schedules. Under **Routes, fares, alerts**: route list, service alerts, fares and passes, park and ride, the planned Lowcountry Rapid Transit line |
 | **About** | What the site is, where every number comes from, caveats; marked up for search and answer engines |
 | **Settings** | Light/dark/device theme, reduce animation, forget the saved address, analytics opt-out, offline copy on/off, clear saved data, check for update, install |
 
@@ -30,11 +31,15 @@ npm run dev      # http://localhost:8765 (wrangler dev: static files + the STOFS
 npm test         # STOFS parser, plain-language wording, SEO, PWA/offline manifest and page-structure checks
 npm run deploy   # Cloudflare Workers
 npx wrangler secret put GA_MEASUREMENT_ID   # optional: Google Analytics 4 (G-XXXX), production only
+npx wrangler secret put SWIFTLY_KEY         # optional: CARTA live buses (key from goswift.ly/realtime-api-key); locally, put it in .dev.vars
 ```
 
-No build step and no API keys. The site is plain HTML/JS in `public/`, served as Cloudflare Workers static assets.
-`src/worker.js` runs only for `/api/stofs`: it proxies NOAA STOFS surge guidance (published on S3 without CORS
-headers) and caches the parsed result at the edge for 30 minutes. Three.js and Leaflet load from CDNs.
+No build step, and the only API key is optional. The site is plain HTML/JS in `public/`, served as Cloudflare Workers static assets.
+`src/worker.js` runs only for `/api/*` and `/ga.js`: `/api/stofs` proxies NOAA STOFS surge guidance (published on S3 without CORS
+headers) and caches the parsed result at the edge for 30 minutes; `/api/dem` caches the USGS 3DEP export for 30 days;
+`/api/carta/{vehicles,stop,alerts}` decodes CARTA's Swiftly GTFS-realtime feeds (key in `SWIFTLY_KEY`, 15 s edge cache;
+without a key it answers 503 and the Transit tab shows the schedule only). The Transit tab unzips and parses the CARTA GTFS
+feed in a Web Worker (`public/gtfs.js`). Three.js and Leaflet load from CDNs.
 No deploy-time versioning for the service worker: same-origin files are network-first, so a deploy shows up on the next
 online load. Add new pages, scripts or CDN URLs to the lists at the top of `public/sw.js` (`npm test` checks they match).
 
@@ -50,6 +55,7 @@ All public, fetched live in the browser:
 - **City of Charleston GIS** — permits, code cases, road closures, police open data, heat-island models, tree canopy,
   equity, storm inlets and pipes, service areas, districts, geocoder
 - **Charleston County GIS** — storm pipes
+- **CARTA** — GTFS schedule (Trillium, via the Mobility Database mirror), live buses, predictions and alerts (Swiftly)
 - **Census TIGERweb** — ZIP extents · **Esri** — basemaps
 
 ## Caveats

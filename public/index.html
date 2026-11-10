@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Holy City Live</title>
-<meta name="description" content="Live flood, heat, construction, public safety and city-service dashboards for Charleston, SC, built on public NOAA, USGS, FEMA, City and County data.">
+<meta name="description" content="Live flood, heat, construction, public safety, city-service and CARTA bus dashboards for Charleston, SC, built on public NOAA, USGS, FEMA, City, County and CARTA data.">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Holy City Live">
 <meta property="og:title" content="Holy City Live">
-<meta property="og:description" content="Live flood, heat, construction, public safety and city-service dashboards for Charleston, SC.">
+<meta property="og:description" content="Live flood, heat, construction, public safety, city-service and CARTA bus dashboards for Charleston, SC.">
 <link rel="canonical" href="https://www.holycity.live/">
 <meta property="og:url" content="https://www.holycity.live/">
 <meta property="og:image" content="https://www.holycity.live/og-image.png">
@@ -57,10 +57,10 @@
   iframe.active { visibility: visible; }
   @media (max-width: 760px) {
     /* bottom tab bar in thumb reach: icon over a short name, the selected icon sits in a filled pill */
-    nav { order: 1; display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 1fr); gap: 0; padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    nav { order: 1; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 1fr); gap: 0; padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
       border-bottom: 0; border-top: 1px solid var(--edge); }
     nav .logo { display: none; }
-    nav > [role=tablist] { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; }
+    nav > [role=tablist] { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; }
     nav > [role=tablist] > [role=tab], #menuBtn { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-height: 60px; padding: 4px 2px;
       border-radius: 16px; font-size: 12px; background: none; color: var(--muted); }
     nav > [role=tablist] > [role=tab][aria-selected=true] { background: none; color: var(--text); }
@@ -79,7 +79,7 @@
 </style>
 </head>
 <body>
-<h1 class="sr-only">Holy City Live: live flood, heat, construction, public safety and service-day dashboards for Charleston, SC</h1>
+<h1 class="sr-only">Holy City Live: live flood, heat, construction, public safety, service-day and transit dashboards for Charleston, SC</h1>
 <nav>
   <a href="/" class="logo">
     <img class="on-dark" src="logo-reverse.svg" alt="Holy City Live" width="151" height="26">
@@ -90,6 +90,7 @@
     <a role="tab" data-tab="construction" href="/construction"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 3h4l4.8 16H5.2z"/><path d="M8.2 9h7.6M6.7 14h10.6M3 21h18"/></svg><span class="long">Construction Near Me</span><span class="short" aria-hidden="true">Roadwork</span></a>
     <a role="tab" data-tab="safety" href="/safety"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.9-7.5-9.5V6z"/></svg><span class="long">Public Safety Trends</span><span class="short" aria-hidden="true">Safety</span></a>
     <a role="tab" data-tab="services" href="/services"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16M9.5 6.5V4h5v2.5M6 6.5l1 14h10l1-14M10 10.5v6M14 10.5v6"/></svg><span class="long">Service Days</span><span class="short" aria-hidden="true">Trash day</span></a>
+    <a role="tab" data-tab="transit" href="/transit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17V6a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v11zM6 11h12M8.5 20v-3M15.5 20v-3"/><path d="M9 14h.01M15 14h.01" stroke-width="2.6"/></svg><span class="long">Transit</span><span class="short" aria-hidden="true">Bus</span></a>
   </div>
   <button id="menuBtn" type="button" popovertarget="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"/></svg>More</button>
   <div id="menu" popover>

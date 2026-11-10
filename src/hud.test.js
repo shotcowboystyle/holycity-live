@@ -6,7 +6,7 @@ const read = f => readFileSync(new URL(`../public/${f}`, import.meta.url), 'utf8
 
 // dash.js wires the phone bottom sheet on import without checking, so every dashboard needs the pieces it expects
 test('every dashboard has the sheet handle, a drawer button and a map', () => {
-  for (const page of ['risk.html', 'construction.html', 'safety.html', 'services.html']) {
+  for (const page of ['risk.html', 'construction.html', 'safety.html', 'services.html', 'transit.html']) {
     const html = read(page), card = html.match(/<section id="card"[\s\S]*?<\/section>/)?.[0] ?? '';
     assert.match(card, /<button class="handle" type="button" aria-expanded="false" aria-label="[^"]+">/, `${page}: handle in the card`);
     assert.match(html, /<div class="corner">[\s\S]*?popovertarget="more"/, `${page}: drawer button in the corner`);
@@ -16,8 +16,8 @@ test('every dashboard has the sheet handle, a drawer button and a map', () => {
 
 // the shell's phone tab bar reads the long name for frame titles and analytics, and keeps both names on each dashboard tab
 test('dashboard tabs carry a long name and a short phone label', () => {
-  const tabs = [...read('index.html').matchAll(/<a role="tab" data-tab="(risk|construction|safety|services)"[^>]*>([\s\S]*?)<\/a>/g)];
-  assert.equal(tabs.length, 4);
+  const tabs = [...read('index.html').matchAll(/<a role="tab" data-tab="(risk|construction|safety|services|transit)"[^>]*>([\s\S]*?)<\/a>/g)];
+  assert.equal(tabs.length, 5);
   for (const [, tab, inner] of tabs) {
     assert.match(inner, /<span class="long">[^<]+<\/span>/, `${tab}: long name`);
     assert.match(inner, /<span class="short" aria-hidden="true">[^<]+<\/span>/, `${tab}: short label`);

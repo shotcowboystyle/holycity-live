@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transit · Holy City Live</title>
+<meta name="description" content="CARTA bus routes and stops across Charleston, the next buses at the stop nearest any address, live bus positions, service alerts, fares and park and ride lots.">
+<link rel="canonical" href="https://www.holycity.live/transit">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Holy City Live">
+<meta property="og:title" content="Transit · Holy City Live">
+<meta property="og:description" content="CARTA bus routes and stops across Charleston, the next buses at the stop nearest any address, live bus positions, service alerts, fares and park and ride lots.">
+<meta property="og:url" content="https://www.holycity.live/transit">
+<meta property="og:image" content="https://www.holycity.live/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.css">
+<link rel="stylesheet" href="tokens.css">
+<script src="theme.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400..700&family=Public+Sans:wght@400;600;800&display=swap">
+<link rel="stylesheet" href="dash.css">
+<style>
+  /* route badge: the route's own color from CARTA's feed, text picked for contrast */
+  .badge { display: inline-block; min-width: 2.4em; padding: 1px 7px; border-radius: 8px; font-size: 12px; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+  /* next buses at the chosen stop: one chip each, soonest first */
+  #deps { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+  #deps li { display: grid; gap: 2px; padding: 8px 10px; border-radius: 14px; background: var(--soft); min-width: 0; }
+  #deps .when { font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; }
+  #deps .to { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #deps .empty { grid-column: 1 / -1; background: none; padding: 0; color: var(--muted); font-size: 13px; }
+  .live::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: var(--good); vertical-align: 1px; }
+  .alert-line { border-left: 3px solid var(--warn); padding-left: 8px; }
+  #routes .pick { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: baseline; }
+  #routes .pick[aria-pressed=true] { background: var(--hover); }
+  #routes .meta { grid-column: 2; }
+  @media (max-width: 760px) { #deps { grid-template-columns: repeat(3, minmax(0, 1fr)); } #deps li:nth-child(n+4) { display: none; } }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.3/leaflet-maplibre-gl.js"></script>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="hud">
+  <div id="addr" class="glass"></div>
+  <div class="corner"><button type="button" popovertarget="more"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M18 7h2M4 17h3M12 17h8"/><circle cx="15.5" cy="7" r="2.5"/><circle cx="9.5" cy="17" r="2.5"/></svg>Routes, fares, alerts</button></div>
+
+  <section id="card" class="glass" aria-label="Buses near you">
+    <button class="handle" type="button" aria-expanded="false" aria-label="Layers and details"></button>
+    <h1 class="kicker"><a href="/#transit" target="_top">Holy City Live</a> · CARTA buses near you</h1>
+    <h2 id="headline">Loading the bus schedule…</h2>
+    <p id="detail"></p>
+    <p class="sub alert-line" id="alertLine" hidden></p>
+    <p class="sub extra" id="nearLbl" hidden>Other stops nearby</p>
+    <ul class="picks" id="nearby"></ul>
+  </section>
+
+  <div class="dock glass">
+    <p class="cap"><b id="capStop">Next buses</b><span id="liveNote"></span></p>
+    <ol id="deps" aria-label="Next buses at this stop"></ol>
+    <div class="dock-row">
+      <div class="toggles" role="group" aria-label="Show on the map">
+        <label class="toggle"><input type="checkbox" id="lLive" checked><i class="sw dot" style="background:var(--good)"></i>Live buses</label>
+        <label class="toggle"><input type="checkbox" id="lStops" checked><i class="sw dot" style="background:var(--text)"></i>Stops</label>
+        <label class="toggle"><input type="checkbox" id="lLcrt"><i class="sw line" style="background:var(--accent)"></i>Rapid transit plan</label>
+      </div>
+    </div>
+    <div id="attrib"></div>
+  </div>
+</div>
+
+<aside id="more" popover="manual" aria-label="Transit details">
+  <div class="more-head"><h2>Transit details</h2><button type="button" popovertarget="more" popovertargetaction="hide">Close</button></div>
+  <details open>
+    <summary>Routes</summary>
+    <p class="sub">Tap a route to show only it on the map.</p>
+    <ul class="list" id="routes"><li class="sub">Loading…</li></ul>
+  </details>
+  <details>
+    <summary>Service alerts</summary>
+    <ul class="list" id="alerts"><li class="sub">Loading…</li></ul>
+  </details>
+  <details>
+    <summary>Fares and passes</summary>
+    <div class="kv">
+      <span>One ride</span><span>$2.00</span>
+      <span>Express (XP routes)</span><span>$3.50</span>
+      <span>DASH downtown shuttles</span><span>Free</span>
+      <span>Seniors 55+</span><span>$1.00</span>
+      <span>Riders with disabilities</span><span>$0.75</span>
+      <span>K–12 students with school ID</span><span>Free</span>
+      <span>Under 6 with a paying adult</span><span>Free</span>
+      <span>1-day pass</span><span>$7</span>
+      <span>7-day pass</span><span>$15 ($25 Express)</span>
+      <span>31-day pass</span><span>$57 ($99 Express)</span>
+    </div>
+    <div class="note">Transfers are free within 2 hours. Mobile tickets through the Token Transit app.
+      From <a href="https://ridecarta.com/fares-passes/" target="_blank" rel="noopener">ridecarta.com</a>, November 2026; check there before you ride.</div>
+  </details>
+  <details>
+    <summary>Park and ride</summary>
+    <ul class="list">
+      <li>2150 Melnick Dr (Rivers Ave), North Charleston</li>
+      <li>5101 Ashley Phosphate Rd, North Charleston</li>
+      <li>Wando Crossing Walmart, Mt. Pleasant</li>
+      <li>Oakland Walmart, Mt. Pleasant</li>
+      <li>Citadel Mall, West Ashley</li>
+      <li>Folly Rd Walmart, James Island</li>
+      <li>10150 Dorchester Rd, Summerville</li>
+    </ul>
+    <div class="note">Free parking for Express riders. List from <a href="https://ridecarta.com/services/park-ride/" target="_blank" rel="noopener">ridecarta.com</a>, November 2026.</div>
+  </details>
+  <details>
+    <summary>About this data</summary>
+    <div class="note">Routes, stops, timetables and holiday schedules: CARTA's published GTFS feed (by Trillium, mirrored by the Mobility Database),
+      <span id="feedInfo">loading</span>. Live bus positions, arrival predictions and alerts: Swiftly, refreshed every 15 seconds while this tab is open.
+      Times marked with a green dot are live; the rest are scheduled. Rapid transit plan: the Lowcountry Rapid Transit preferred alignment and stations
+      from the City of Charleston's mobility map, a plan and not a running service. Tel-A-Ride and on-demand service aren't in the feed.
+      Tap a stop for its next buses, or the map anywhere to look nearby.</div>
+    <div class="note" id="status"></div>
+  </details>
+</aside>
+
+<script type="module">
+import { $, esc, miles, metersBetween, makeMap, addressBox, failed, cssVar, param, setParam, getJSON } from './dash.js';
+
+const FEED = 'https://files.mobilitydatabase.org/mdb-352/latest.zip'; // CARTA GTFS, mirrored with CORS (the Trillium original has none)
+const LCRT = 'https://services2.arcgis.com/tQaXW7Zb1Vphzvgd/arcgis/rest/services/Mobility_Web_Map_WFL1/FeatureServer'; // 28 alignment, 29 stations
+const NEAR = 805, TICK = 15000, STALE = 5 * 60; // half a mile; refresh every 15 s; drop bus positions older than 5 min
+const map = makeMap('map', undefined, 14);
+map.attributionControl.addAttribution('Transit: CARTA, Trillium, Mobility Database, Swiftly');
+const lineLayer = L.layerGroup().addTo(map), stopLayer = L.layerGroup(), busLayer = L.layerGroup().addTo(map), hereLayer = L.layerGroup().addTo(map);
+let lcrtLayer = null;
+
+// the schedule lives in gtfs.js on a worker thread; ask(task, args) → its answer
+const gtfs = new Worker('gtfs.js', { type: 'module' }), pending = new Map();
+let jobId = 0;
+gtfs.onmessage = ({ data: { id, result, error } }) => { const [res, rej] = pending.get(id); pending.delete(id); error ? rej(new Error(error)) : res(result); };
+const ask = (task, args) => new Promise((res, rej) => { pending.set(++jobId, [res, rej]); gtfs.postMessage({ id: jobId, task, ...args }); });
+
+let data = null, byId = {}, place = null, focus = null, picked = param('route'), alertList = [], liveOn = true, seq = 0;
+let sharedStop = param('stop'); // a shared link's stop is shown once, then the stop nearest each new place
+const status = {};
+const showStatus = () => { $('status').innerHTML = Object.entries(status).map(([k, v]) => `${esc(k)}: <span class="${v === 'ok' ? 'ok' : 'bad'}">${v === 'ok' ? '✓' : esc(v)}</span>`).join('<br>'); };
+
+// ---------- formatting ----------
+const ink = c => { const [r, g, b] = c.match(/\w\w/g).map(h => parseInt(h, 16) / 255); return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.45 ? '#0b0f14' : '#ffffff'; };
+const short = r => r.short || r.name.split(' ')[0];
+const badge = id => { const r = byId[id]; return r ? `<span class="badge" style="background:${r.color};color:${ink(r.color)}">${esc(short(r))}</span>` : ''; };
+const routeName = r => r.short ? `${r.short} ${r.name}` : r.name;
+const clock = ms => new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+const when = ms => { const m = Math.round((ms - Date.now()) / 60000); return m <= 0 ? 'Now' : m < 60 ? `${m} min` : clock(ms); };
+const walk = m => `${miles(m)}, about ${Math.max(1, Math.round(m / 80))} min walk`; // ~80 m a minute
+const free = r => r.fare === 0 ? ' · free' : '';
+
+// ---------- live data (worker proxy to Swiftly; 503 when no key is set, so the schedule stands alone) ----------
+async function live(path) {
+  if (!liveOn) return null;
+  const r = await fetch(path);
+  if (r.status === 503) { liveOn = false; status['Live buses (Swiftly)'] = 'not set up'; showStatus(); $('liveNote').textContent = 'Scheduled times'; $('lLive').closest('label').hidden = true; return null; }
+  if (!r.ok) throw new Error(`${r.status} ${path}`);
+  status['Live buses (Swiftly)'] = 'ok'; showStatus();
+  $('liveNote').innerHTML = '<span class="live"></span>Live';
+  return r.json();
+}
+const liveFailed = e => { // the schedule still answers; say so once and keep trying on the next tick
+  status['Live buses (Swiftly)'] = e.message; showStatus();
+  $('liveNote').textContent = 'Live times unavailable, showing the schedule';
+};
+
+// scheduled departures for stops, with live predictions laid over the ones Swiftly tracks
+async function departures(ids, n) {
+  const sched = await ask('next', { stops: ids, n });
+  if (!liveOn) return sched;
+  const preds = await Promise.all(ids.map(id => live(`/api/carta/stop?id=${encodeURIComponent(id)}`).catch(e => { liveFailed(e); return null; })));
+  ids.forEach((id, k) => {
+    const byTrip = new Map((preds[k] ?? []).map(p => [p.trip, p]));
+    sched[id] = sched[id].flatMap(d => {
+      const p = byTrip.get(d.trip);
+      if (!p) return [d];
+      if (p.skipped) return [];
+      return [{ ...d, time: p.time ? p.time * 1000 : d.time + (p.delay ?? 0) * 1000, live: true }];
+    }).filter(d => d.time > Date.now() - 60000).sort((a, b) => a.time - b.time);
+  });
+  return sched;
+}
+const depChip = d => `<li><span class="when${d.live ? ' live' : ''}">${when(d.time)}</span><span>${badge(d.route)}</span><span class="to" title="${esc(d.headsign)}">to ${esc(d.headsign)}</span></li>`;
+const inWords = ms => { const w = when(ms); return w === 'Now' ? 'now' : w.endsWith('min') ? `in ${w}` : `at ${w}`; };
+
+// ---------- map layers ----------
+function drawLines() {
+  lineLayer.clearLayers();
+  const pr = picked && data.routes.find(r => short(r) === picked);
+  for (const l of data.lines) {
+    const r = byId[l.route], on = !pr || pr.id === l.route;
+    L.polyline(l.pts, { color: r.color, weight: on && pr ? 5 : 3, opacity: on ? 0.9 : 0.12, interactive: on })
+      .bindTooltip(esc(routeName(r)) + free(r), { sticky: true }).on('click', () => pickRoute(short(r))).addTo(lineLayer);
+  }
+  if (pr) map.fitBounds(L.latLngBounds(data.lines.filter(l => l.route === pr.id).flatMap(l => l.pts)), { padding: [40, 40] });
+  document.querySelectorAll('#routes .pick').forEach(b => b.setAttribute('aria-pressed', b.dataset.route === picked));
+  drawStops();
+}
+function drawStops() {
+  stopLayer.clearLayers();
+  const pr = picked && data.routes.find(r => short(r) === picked), dot = cssVar('--text'), bg = cssVar('--bg');
+  for (const s of data.stops) {
+    if (pr && !s.routes.includes(pr.id)) continue;
+    L.circleMarker([s.lat, s.lon], { radius: 4, color: bg, weight: 1.5, fillColor: dot, fillOpacity: 0.9 })
+      .bindTooltip(esc(s.name)).on('click', e => { L.DomEvent.stopPropagation(e); showStop(s, true); }).addTo(stopLayer);
+  }
+}
+const stopsVisible = () => $('lStops').checked && (map.getZoom() >= 14 || picked);
+const syncStops = () => { if (stopsVisible()) stopLayer.addTo(map); else stopLayer.remove(); };
+map.on('zoomend', syncStops);
+$('lStops').addEventListener('change', syncStops);
+
+function pickRoute(key) {
+  picked = picked === key ? null : key;
+  setParam('route', picked);
+  drawLines(); syncStops();
+}
+
+async function drawBuses() {
+  if (!$('lLive').checked || !liveOn) { busLayer.clearLayers(); return; }
+  let vs;
+  try { vs = await live('/api/carta/vehicles'); } catch (e) { liveFailed(e); return; }
+  busLayer.clearLayers();
+  if (!vs) return;
+  const now = Date.now() / 1000, pr = picked && data.routes.find(r => short(r) === picked);
+  for (const v of vs) {
+    const r = byId[v.route];
+    if ((v.ts && now - v.ts > STALE) || (pr && v.route !== pr.id)) continue;
+    L.circleMarker([v.lat, v.lon], { radius: 7, color: '#fff', weight: 2, fillColor: r?.color ?? cssVar('--good'), fillOpacity: 1 })
+      .bindTooltip(`${r ? esc(routeName(r)) : 'CARTA'} bus${v.label ? ` ${esc(v.label)}` : ''}${v.ts ? `, seen ${Math.max(0, Math.round(now - v.ts))} s ago` : ''}`).addTo(busLayer);
+  }
+}
+$('lLive').addEventListener('change', drawBuses);
+
+$('lLcrt').addEventListener('change', async () => {
+  if (!$('lLcrt').checked) { lcrtLayer?.remove(); return; }
+  if (!lcrtLayer) {
+    const q = l => getJSON(`${LCRT}/${l}/query?${new URLSearchParams({ where: '1=1', outFields: '*', outSR: 4326, resultRecordCount: 100, f: 'geojson' })}`);
+    try {
+      const [line, stations] = await Promise.all([q(28), q(29)]), accent = cssVar('--accent');
+      lcrtLayer = L.layerGroup([
+        L.geoJSON(line, { style: f => ({ color: accent, weight: 5, opacity: 0.85, dashArray: f.properties.Name === 'Preferred Alignment' ? null : '6 8' }),
+          onEachFeature: (f, l) => l.bindTooltip(`Lowcountry Rapid Transit: ${esc(f.properties.Name === 'Preferred Alignment' ? 'planned route' : 'possible future extension')}`, { sticky: true }) }),
+        L.geoJSON(stations, { pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 6, color: accent, weight: 2.5, fillColor: cssVar('--bg'), fillOpacity: 1 })
+          .bindTooltip(`Planned station: ${esc(f.properties.Station)}`) }),
+      ]);
+      status['Rapid transit plan (City of Charleston)'] = 'ok';
+    } catch (e) { status['Rapid transit plan (City of Charleston)'] = e.message; $('lLcrt').checked = false; showStatus(); return; } // shown in About this data
+    showStatus();
+  }
+  if ($('lLcrt').checked) lcrtLayer.addTo(map);
+});
+
+// ---------- the answer: next buses near the picked place ----------
+async function showStop(s, popup = false) {
+  focus = s;
+  if (popup) setParam('stop', s.id); // only a stop the rider chose goes in a shared link
+  $('capStop').textContent = `Next buses at ${s.name}`;
+  const deps = (await departures([s.id], 6))[s.id];
+  if (focus !== s) return;
+  showAlertLine();
+  $('deps').innerHTML = deps.length ? deps.map(depChip).join('') : '<li class="empty">No buses scheduled here today or tomorrow.</li>';
+  if (popup) L.popup().setLatLng([s.lat, s.lon]).setContent(`<b>${esc(s.name)}</b>${s.code ? ` <span class="sub">stop ${esc(s.code)}</span>` : ''}
+    <div style="margin:6px 0">${s.routes.map(badge).join(' ')}</div>
+    ${deps.slice(0, 4).map(d => `<div><span class="${d.live ? 'live' : ''}">${when(d.time)}</span> ${badge(d.route)} to ${esc(d.headsign)}</div>`).join('') || '<div class="sub">No more buses today.</div>'}`).openOn(map);
+}
+
+async function lookup(p, refresh = false) { // refresh: the 15 s tick, which keeps the view and the stop the rider chose
+  place = p;
+  const mySeq = ++seq;
+  if (!refresh) {
+    focus = null;
+    hereLayer.clearLayers();
+    L.circleMarker([p.lat, p.lon], { radius: 7, color: '#fff', weight: 2, fillColor: cssVar('--accent'), fillOpacity: 1 }).addTo(hereLayer).bindTooltip(esc(p.label));
+  }
+  if (!data) return; // the schedule's load finishes and calls lookup again
+  if (!refresh) map.setView([p.lat, p.lon], Math.max(map.getZoom(), 15));
+  const near = data.stops.map(s => ({ s, d: metersBetween([p.lat, p.lon], [s.lat, s.lon]) })).sort((a, b) => a.d - b.d).slice(0, 4);
+  const close = near.filter(x => x.d <= NEAR), look = close.length ? close : near.slice(0, 1);
+  const deps = await departures(look.map(x => x.s.id), 3);
+  if (mySeq !== seq) return;
+  // headline: the soonest bus among the closest stops, from the nearest stop on a tie
+  const best = look.map(x => ({ ...x, next: deps[x.s.id][0] })).filter(x => x.next).sort((a, b) => a.next.time - b.next.time || a.d - b.d)[0];
+  if (!close.length) {
+    $('headline').textContent = 'No CARTA stop within a half mile';
+    $('detail').textContent = `Nearest stop: ${near[0].s.name}, ${miles(near[0].d)} away.`;
+  } else if (!best) {
+    $('headline').textContent = 'No more buses nearby today';
+    $('detail').textContent = `Nearest stop: ${close[0].s.name}, ${walk(close[0].d)}.`;
+  } else {
+    const then = deps[best.s.id].slice(1, 3).map(d => `${short(byId[d.route])} ${when(d.time) === 'Now' ? 'now' : when(d.time)}`).join(', ');
+    const n = best.next;
+    $('headline').textContent = `Route ${short(byId[n.route])} to ${n.headsign} ${inWords(n.time)}${n.live ? '' : ' (scheduled)'}`;
+    $('detail').textContent = `From ${best.s.name}, ${walk(best.d)}.${then ? ` After that: ${then}.` : ''}`;
+  }
+  const others = close.filter(x => x !== best);
+  $('nearLbl').hidden = !others.length;
+  $('nearby').innerHTML = others.map(x => `<li><button type="button" data-stop="${esc(x.s.id)}">${esc(x.s.name)} <span class="meta">${miles(x.d)} · ${x.s.routes.map(badge).join(' ')}
+    ${deps[x.s.id][0] ? `· next ${esc(when(deps[x.s.id][0].time))}` : '· none today'}</span></button></li>`).join('');
+  const shared = sharedStop && data.stops.find(s => s.id === sharedStop);
+  sharedStop = null;
+  await showStop(focus ?? shared ?? best?.s ?? close[0]?.s ?? near[0].s);
+  showAlertLine(); // after showStop: the line follows the chosen stop's routes
+}
+$('nearby').addEventListener('click', e => {
+  const b = e.target.closest('[data-stop]'); if (!b) return;
+  const s = data.stops.find(x => x.id === b.dataset.stop); map.panTo([s.lat, s.lon]); showStop(s, true);
+});
+
+// ---------- alerts ----------
+const activeAlert = a => { const t = Date.now() / 1000; return !a.periods.length || a.periods.some(([s, e]) => (!s || s <= t) && (!e || t <= e)); };
+async function loadAlerts() {
+  let list;
+  try { list = await live('/api/carta/alerts'); } catch (e) { liveFailed(e); $('alerts').innerHTML = '<li class="sub">Alerts are unavailable right now.</li>'; return; }
+  if (!list) { $('alerts').innerHTML = '<li class="sub">Live alerts aren\'t set up. See <a href="https://ridecarta.com" target="_blank" rel="noopener">ridecarta.com</a>.</li>'; return; }
+  alertList = list.filter(activeAlert);
+  $('alerts').innerHTML = alertList.length ? alertList.map(a => `<li><div>${a.routes.map(badge).join(' ')} <b>${esc(a.header)}</b></div>
+    ${a.description ? `<div class="meta">${esc(a.description)}</div>` : ''}${/^https?:/.test(a.url) ? `<a class="meta" href="${esc(a.url)}" target="_blank" rel="noopener">More</a>` : ''}</li>`).join('')
+    : '<li class="sub">No service alerts right now.</li>';
+  showAlertLine();
+}
+function showAlertLine() { // today's holiday schedule, and an alert for a route at the chosen stop, go on the card
+  const here = new Set((focus ?? { routes: [] }).routes), a = alertList.find(x => x.routes.some(r => here.has(r)));
+  const lines = [data?.holiday && `Holiday schedule today: ${esc(data.holiday)}.`, a && `${a.routes.filter(r => here.has(r)).map(badge).join(' ')} ${esc(a.header)}`].filter(Boolean);
+  $('alertLine').hidden = !lines.length;
+  $('alertLine').innerHTML = lines.join('<br>');
+}
+
+// ---------- refresh while visible: the shell says when this tab is hidden ----------
+let tabActive = true;
+const tick = () => {
+  if (!tabActive || document.hidden || !data) return;
+  drawBuses();
+  if (place) lookup(place, true); else if (focus) showStop(focus);
+};
+setInterval(tick, TICK);
+addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'tab') { tabActive = e.data.active; tick(); } });
+document.addEventListener('visibilitychange', tick);
+
+// ---------- start ----------
+map.on('click', e => box.pick({ label: 'Picked on the map', lat: e.latlng.lat, lon: e.latlng.lng }));
+async function load() {
+  $('headline').textContent = 'Loading the bus schedule…'; $('detail').textContent = '';
+  try { data = await ask('load', { url: FEED }); }
+  catch (e) {
+    status['CARTA schedule (GTFS)'] = e.message; showStatus();
+    $('headline').textContent = "The bus schedule didn't load"; failed($('detail'), 'The CARTA schedule', e, load); return; // shown in the card
+  }
+  status['CARTA schedule (GTFS)'] = 'ok'; showStatus();
+  byId = Object.fromEntries(data.routes.map(r => [r.id, r]));
+  const ymd = s => s ? `${+s.slice(4, 6)}/${+s.slice(6)}/${s.slice(0, 4)}` : '?';
+  $('feedInfo').textContent = `version ${data.feed.version}, valid ${ymd(data.feed.start)} to ${ymd(data.feed.end)}`;
+  $('routes').innerHTML = data.routes.map(r => `<li><button type="button" class="pick" data-route="${esc(short(r))}" aria-pressed="false">${badge(r.id)}
+    <span>${esc(r.name)}${r.fare === 0 ? ' <b>· free</b>' : r.fare ? ` <span class="meta">· $${r.fare.toFixed(2)}</span>` : ''}</span>
+    <span class="meta">${esc(r.desc)}${/^https?:/.test(r.url) ? ` <a href="${esc(r.url)}" target="_blank" rel="noopener">Schedule</a>` : ''}</span></button></li>`).join('');
+  drawLines(); syncStops();
+  if (place) lookup(place); else showStop(data.stops.find(s => s.id === param('stop')) ?? data.stops[0]);
+  drawBuses(); loadAlerts();
+}
+$('routes').addEventListener('click', e => { const b = e.target.closest('[data-route]'); if (b && !e.target.closest('a')) pickRoute(b.dataset.route); });
+
+// created last: a saved address triggers lookup() immediately, so everything it uses must exist first
+const box = addressBox($('addr'), lookup);
+if (!$('addr').querySelector('[data-msg]').textContent) box.pick({ label: 'Charleston Visitor Center, 375 Meeting St', lat: 32.7889, lon: -79.9365 }, false);
+load();
+</script>
+</body>
+</html>
