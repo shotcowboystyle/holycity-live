@@ -44,10 +44,10 @@ test('manifest icons exist and shortcuts open real tabs', () => {
   assert.ok(m.icons.every(i => i.purpose !== 'any maskable'), 'one purpose per icon entry');
 });
 
-test('analytics script honors the Settings opt-out', () => {
+test('analytics script waits for consent', () => {
   const js = gaScript('G-TEST1');
   return js.text().then(t => {
-    assert.match(t, /localStorage\.getItem\('analytics'\) === 'off'/);
+    assert.match(t, /if \(analyticsConsent\(\) === 'on'\) loadGA\(\)/);
     assert.match(t, /gtag\/js\?id=G-TEST1/);
   }).then(() => gaScript().text()).then(t => assert.equal(t, ''));
 });

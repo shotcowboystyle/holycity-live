@@ -77,6 +77,21 @@
     #menu [role=tab][aria-selected=true] { background: var(--on); color: var(--on-text); }
     #share { border: 0; }
   }
+  /* cookie consent: a non-modal card at the bottom; on phones it sits above the tab bar like the More menu */
+  #consent { position: fixed; z-index: 10; inset: auto 16px 16px auto; max-width: 420px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    padding: 16px; border: 1px solid var(--edge); border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); }
+  #consent[hidden] { display: none; }
+  #consent p { margin: 0; flex: 1 1 100%; }
+  #consent a { color: var(--accent); }
+  #consent .btns { display: flex; gap: 8px; margin-left: auto; }
+  #consent button { min-height: 40px; padding: 0 18px; border-radius: 999px; font: 600 14px/1.2 var(--font); cursor: pointer;
+    border: 1px solid var(--control-line); background: var(--button-bg); color: var(--text); }
+  #consent button:focus-visible, #consent a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (max-width: 760px) {
+    #consent { inset: auto 16px calc(92px + env(safe-area-inset-bottom)) 16px; max-width: none; }
+    #consent .btns { flex: 1 1 100%; }
+    #consent button { flex: 1; min-height: 48px; }
+  }
   /* Press: buttons and tiles dip to 0.96. Scale only without a reduced-motion preference (OS or Settings pick). */
   @media (prefers-reduced-motion: no-preference) {
     :root:not([data-motion=reduce]) :is(nav [role=tab], nav button) { transition-property: scale; transition-duration: 150ms; transition-timing-function: ease-out; }
@@ -109,15 +124,20 @@
 </nav>
 <p id="offline" hidden role="status">Offline: showing what loaded last</p>
 <main id="panes"></main>
+<section id="consent" aria-label="Cookie consent" hidden>
+  <p>Holy City Live can use Google Analytics cookies to count which dashboards are opened. Never your address or location. Change this anytime in <a href="#settings">Settings</a>.</p>
+  <div class="btns"><button type="button" id="consentNo">Decline</button><button type="button" id="consentYes">Accept</button></div>
+</section>
 <script>
   // Each dashboard is its own page, loaded into an iframe the first time its tab opens and kept alive after.
   const tabs = [...document.querySelectorAll('[role=tab]')], panes = document.getElementById('panes'), frames = {};
   const tabName = t => t.querySelector('.long')?.textContent ?? t.textContent; // dashboard tabs also carry a short phone label
   const menu = document.getElementById('menu'), closeMenu = () => { if (menu.matches(':popover-open')) menu.hidePopover(); };
+  // one page_view per tab opened; the hash only, never the address/settings in the URL. No-op until analytics is accepted.
+  const track = tab => window.gtag?.('event', 'page_view', { page_title: tabName(tab), page_location: location.origin + '/#' + tab.dataset.tab });
   function show(name) {
     const tab = tabs.find(t => t.dataset.tab === name) ?? tabs[0];
-    if (tab.getAttribute('aria-selected') !== 'true') // one page_view per tab opened; the hash only, never the address/settings in the URL
-      window.gtag?.('event', 'page_view', { page_title: tabName(tab), page_location: location.origin + '/#' + tab.dataset.tab });
+    if (tab.getAttribute('aria-selected') !== 'true') track(tab);
     if (!frames[tab.dataset.tab]) {
       const f = document.createElement('iframe');
       f.src = tab.getAttribute('href'); f.title = tabName(tab);
@@ -148,6 +168,7 @@
   // redraw their maps (state is in the URL). chs-location is written on every address pick, so only its removal counts.
   const paintTheme = () => { document.querySelector('meta[name=theme-color]').content = document.documentElement.dataset.theme === 'light' ? '#F6F4EE' : '#141A22'; };
   addEventListener('storage', e => {
+    if (e.key === 'consent') { consent.hidden = true; if (window.analyticsConsent?.() === 'on' && !window.gtag) { loadGA(); track(current()); } }
     if (e.key === 'theme') { applyTheme(); paintTheme(); }
     if (e.key === 'theme' || e.key === 'motion' || (e.key === 'chs-location' && e.newValue === null))
       for (const [name, f] of Object.entries(frames)) if (name !== 'settings') f.contentWindow.location.reload(); // Settings re-skins itself
@@ -165,6 +186,13 @@
   addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; frames.settings?.contentWindow.postMessage({ type: 'canInstall' }, location.origin); });
   addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'install') installEvt?.prompt(); });
   show(location.hash.slice(1));
+  // cookie consent (opt-in): /ga.js defines these only when analytics is configured, so no ID means no banner
+  const consent = document.getElementById('consent'), current = () => tabs.find(t => t.getAttribute('aria-selected') === 'true');
+  const choose = choice => { setAnalyticsConsent(choice); consent.hidden = true; if (choice === 'on') track(current()); };
+  document.getElementById('consentYes').onclick = () => choose('on');
+  document.getElementById('consentNo').onclick = () => choose('off');
+  consent.querySelector('a').onclick = e => { e.preventDefault(); show('settings'); };
+  consent.hidden = !window.analyticsConsent || analyticsConsent() !== null;
 </script>
 </body>
 </html>
