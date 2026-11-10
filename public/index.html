@@ -29,7 +29,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;800&display=swap">
 <style>
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.4 var(--font); }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.4 var(--font); -webkit-tap-highlight-color: transparent; }
   body { display: flex; flex-direction: column; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   /* Wide screens: logo, then soft pill tabs along the top; the selected one is filled. Phones: a bottom tab bar (below). */
@@ -41,10 +41,11 @@
   nav [role=tablist] { display: flex; gap: 4px; }
   nav [role=tab], nav button { position: relative; display: flex; align-items: center; gap: 8px; padding: 8px 14px; border: 0; border-radius: 999px;
     background: none; color: var(--muted); font: 600 14px/1.2 var(--font); text-decoration: none; white-space: nowrap; cursor: pointer; }
-  nav [role=tab]:hover, nav button:hover { color: var(--text); background: var(--soft); }
+  nav > [role=tablist] > [role=tab] { padding-left: 12px; } /* icon side 2px tighter */
+  @media (hover: hover) { nav [role=tab]:hover, nav button:hover { color: var(--text); background: var(--soft); } }
   nav [role=tab][aria-selected=true] { background: var(--on); color: var(--on-text); }
   nav :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  nav svg { display: block; width: 20px; height: 20px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  nav svg { display: block; width: 20px; height: 20px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; } /* 2px at 20px */
   nav .short, #menuBtn { display: none; }
   /* About, Settings and Copy link: inline in the bar on wide screens (overriding the closed popover's display: none);
      on phones the same element is a popover opened by the tab bar's "More" */
@@ -64,17 +65,22 @@
     nav > [role=tablist] > [role=tab], #menuBtn { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-height: 60px; padding: 4px 2px;
       border-radius: 16px; font-size: 12px; background: none; color: var(--muted); }
     nav > [role=tablist] > [role=tab][aria-selected=true] { background: none; color: var(--text); }
-    nav > [role=tablist] svg, #menuBtn svg { box-sizing: border-box; width: 56px; height: 32px; padding: 4px 16px; border-radius: 999px; }
+    nav > [role=tablist] svg, #menuBtn svg { box-sizing: border-box; width: 56px; height: 32px; padding: 4px 16px; border-radius: 999px; stroke-width: 2; } /* drawn at 24px here */
     nav > [role=tablist] > [aria-selected=true] svg, #menuBtn:has(+ #menu [aria-selected=true]) svg { background: var(--on); color: var(--on-text); }
     nav .long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
     nav .short { display: inline; }
     #menu { position: fixed; inset: auto 8px calc(80px + env(safe-area-inset-bottom)) auto; flex-direction: column; align-items: stretch; gap: 2px;
-      min-width: 220px; padding: 8px; border: 1px solid var(--edge); border-radius: 22px; background: var(--panel); box-shadow: var(--shadow); }
+      min-width: 220px; padding: 8px; border: 1px solid var(--edge); border-radius: 23px; /* 14 + 8 + 1 */ background: var(--panel); box-shadow: var(--shadow); }
     #menu:not(:popover-open) { display: none; }
     #menu .site { flex-direction: column; gap: 2px; }
     #menu [role=tab], #menu button { min-height: 52px; padding: 0 16px; border-radius: 14px; font-size: 16px; color: var(--text); }
     #menu [role=tab][aria-selected=true] { background: var(--on); color: var(--on-text); }
     #share { border: 0; }
+  }
+  /* Press: buttons and tiles dip to 0.96. Scale only without a reduced-motion preference (OS or Settings pick). */
+  @media (prefers-reduced-motion: no-preference) {
+    :root:not([data-motion=reduce]) :is(nav [role=tab], nav button) { transition-property: scale; transition-duration: 150ms; transition-timing-function: ease-out; }
+    :root:not([data-motion=reduce]) :is(nav [role=tab], nav button):not(:disabled):active { scale: .96; }
   }
 </style>
 </head>
