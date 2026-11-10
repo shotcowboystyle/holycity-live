@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Settings · Holy City Live</title>
-<meta name="description" content="Light or dark mode, motion, saved address, analytics, and the offline app copy for Holy City Live.">
+<meta name="description" content="Light or dark mode, motion, saved address, analytics cookies, and the offline app copy for Holy City Live.">
 <meta name="robots" content="noindex">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -42,7 +42,7 @@
 <section aria-labelledby="hPrivacy">
   <h2 id="hPrivacy">Privacy</h2>
   <label class="row"><input type="checkbox" id="analytics"> Send anonymous usage statistics</label>
-  <p class="sub">Which dashboards are opened, via Google Analytics. Never the address or location you search. Changes apply the next time the site opens.</p>
+  <p class="sub">Which dashboards are opened, via Google Analytics cookies. Never the address or location you search. Off until you turn it on. Turning it on applies right away; turning it off applies the next time the site opens.</p>
 </section>
 
 <section aria-labelledby="hApp">
@@ -75,8 +75,13 @@
   addEventListener('storage', e => { if (e.key === 'chs-location') paintPlace(); }); // picked on a dashboard while this tab is open
   paintPlace();
 
-  $('analytics').checked = get('analytics') !== 'off';
-  $('analytics').onchange = e => set('analytics', e.target.checked ? null : 'off');
+  // same record /ga.js reads (keep v in sync with CONSENT_VERSION in src/ga.js); the shell hears it and hides its banner
+  let consent = null; try { consent = JSON.parse(get('consent')); } catch { /* unreadable: treat as not asked */ }
+  $('analytics').checked = consent?.v === 1 && consent.analytics === 'on';
+  $('analytics').onchange = e => {
+    set('consent', JSON.stringify({ analytics: e.target.checked ? 'on' : 'off', v: 1, at: new Date().toISOString() }));
+    set('analytics', null); // pre-banner opt-out key
+  };
 
   // install: the shell (top window) owns the beforeinstallprompt event and tells this frame when it has one
   const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
