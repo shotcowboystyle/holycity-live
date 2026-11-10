@@ -2,8 +2,8 @@
 // live data and map tiles are kept as a fallback for when the network is gone. No version to bump: same-origin
 // files are network-first, so a deploy shows up on the next online load and the cache only serves offline.
 const SHELL = 'hcl-shell', RUNTIME = 'hcl-runtime', RUNTIME_MAX = 3000;
-const PRECACHE = ['/', '/risk', '/construction', '/safety', '/services', '/about', '/settings',
-  '/tokens.css', '/dash.css', '/page.css', '/theme.js', '/dash.js', '/say.js', '/ride.js', '/compute.js', '/app.js',
+const PRECACHE = ['/', '/risk', '/construction', '/safety', '/services', '/transit', '/about', '/settings',
+  '/tokens.css', '/dash.css', '/page.css', '/theme.js', '/dash.js', '/say.js', '/ride.js', '/compute.js', '/app.js', '/gtfs.js',
   '/map-dark.webp', '/map-light.webp', '/logo-reverse.svg', '/logo-color.svg', '/favicon.svg', '/favicon.ico', '/apple-touch-icon.png', '/icon-192.png', '/icon-512.png', '/site.webmanifest'];
 const CDN = ['https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js',
   'https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/MapControls.js',
@@ -46,6 +46,7 @@ self.addEventListener('message', e => {
 self.addEventListener('fetch', e => {
   const req = e.request, url = new URL(req.url);
   if (req.method !== 'GET' || !url.protocol.startsWith('http')) return;
+  if (url.pathname.startsWith('/api/carta/')) return; // live buses: stale is wrong, and the cache key would drop ?id= (another stop's times)
   if (url.origin === location.origin) return e.respondWith(sameOrigin(req, url));
   if (STATIC_HOSTS.includes(url.host)) return e.respondWith(cacheFirst(req));
   e.respondWith(networkFirst(req));

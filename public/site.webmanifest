@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Holy City Live",
   "short_name": "Holy City Live",
-  "description": "Live flood, heat, construction, public safety and city-service dashboards for Charleston, SC",
+  "description": "Live flood, heat, construction, public safety, city-service and CARTA bus dashboards for Charleston, SC",
   "lang": "en-US",
   "start_url": "/",
   "scope": "/",
